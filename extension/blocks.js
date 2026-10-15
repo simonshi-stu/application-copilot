@@ -1,8 +1,11 @@
 export const KINDS = Object.freeze({
   unassigned: '待分类',
   internship_content: '实习内容／工作职责',
+  project_original: '项目原始正文（未拆分）',
   project_content: '项目内容／项目描述',
   project_responsibilities: '项目职责／本人贡献',
+  language: '语言与荣誉',
+  evaluation: '个人评价',
   other: '其他已确认原文',
 });
 
