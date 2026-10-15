@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Application Copilot · 本地段落库</title>
+  <link rel="stylesheet" href="editor.css">
+</head>
+<body>
+  <main>
+    <header><p class="eyebrow">APPLICATION COPILOT · 离线原文模式</p>
+      <h1>你确认内容，工具只负责复制。</h1>
+      <p>简单拆分 → 手动调整与分类 → 逐块确认 → 原文复制。不会让模型重写实习、项目内容或职责。</p>
+    </header>
+    <aside>资料仅保存在当前浏览器，不加密、不上传。不要输入密码、验证码或不必要的证件信息。本版不读取招聘页面、不自动填表、不代提交。</aside>
+    <section aria-labelledby="import-heading">
+      <h2 id="import-heading">1. 导入文字草稿</h2>
+      <label for="source">粘贴自己认可的简历文本，按空行分块。标题也可能被拆成单独块，请自行整理。</label>
+      <textarea id="source" aria-label="简历原文草稿" rows="7" placeholder="粘贴实习或项目原文……"></textarea>
+      <div class="actions">
+        <button id="split" type="button">按空行拆分并追加</button>
+        <label class="file-label">导入 TXT / MD <input id="file" aria-label="导入本地文字文件" type="file" accept=".txt,.md,text/plain,text/markdown"></label>
+      </div>
+      <p class="hint">不支持直接导入 PDF / DOCX；请先自行复制文字。导入不等于确认，也不自动推导本人职责。</p>
+    </section>
+    <section aria-labelledby="blocks-heading">
+      <div class="section-heading"><h2 id="blocks-heading">2. 整理并确认段落</h2><button id="clear" class="danger" type="button">清空本地段落库</button></div>
+      <p>填写所属经历，选择栏目；可在同一块内加入空行、粘贴多个段落。任何修改都需要重新确认。</p>
+      <div id="blocks"></div>
+      <p id="empty">还没有段落。先粘贴文字并拆分。</p>
+    </section>
+    <p id="status" role="status" aria-live="polite"></p>
+  </main>
+  <script type="module" src="editor.js"></script>
+</body>
+</html>

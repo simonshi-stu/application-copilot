@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Application Copilot — 本地段落库",
+  "version": "0.1.0",
+  "description": "本地拆分、人工确认、原文复制简历段落。不联网、不操作招聘页面。",
+  "permissions": ["storage", "clipboardWrite"],
+  "action": { "default_title": "打开本地段落库" },
+  "background": { "service_worker": "background.js" },
+  "options_ui": { "page": "editor.html", "open_in_tab": true },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'none'"
+  }
+}
