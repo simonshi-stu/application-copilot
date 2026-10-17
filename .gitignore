@@ -20,3 +20,7 @@ logs/
 profile*.json
 resume*.json
 blocks*.json
+.cache/
+.runtime/
+.openchamber/
+.opencode/
