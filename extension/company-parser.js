@@ -33,6 +33,28 @@ export function cleanCompanyName(input) {
     .replace(/\s+/g, ' ').trim();
 }
 
+// 纯说明/标题行不当作公司名。
+const NOISE_RE = /(说明|合集|如下|注[：:]|注意|截止|联系方式|详情|更多|时间表|福利|批次|请先|点击|扫码|投递方式)/;
+// 公司名常见特征词。
+const NAME_HINT = /(公司|集团|银行|证券|保险|基金|科技|网络|信息|软件|游戏|股份|有限|控股|实业|制造|大学|学院|研究院|实验室|机构|中心|事务所|汽车|电气|医药|食品|能源|通信|传媒|教育|机器人|智能|电子)/;
+const PUNCT_RE = /[。！？；;…]/;
+
+export function isBareUrlLine(line) {
+  const value = stripLeadDecor(line || '').trim();
+  return /^https?:\/\/\S+$/u.test(value);
+}
+
+export function looksLikeCompanyName(line) {
+  const value = stripLeadDecor(line || '').trim();
+  if (!value || value.length > 30) return false;
+  if (/https?:\/\//.test(value)) return false;
+  if (PUNCT_RE.test(value)) return false;
+  if (NOISE_RE.test(value)) return false;
+  if (/(内推码|推荐码)/.test(value)) return false;
+  return NAME_HINT.test(value) || value.length <= 14;
+}
+
+
 function collectUrls(raw) {
   const found = [];
   const seen = new Set();
@@ -154,20 +176,36 @@ export function parseCompanies(text, makeId = () => crypto.randomUUID()) {
   const blocks = [];
   let current = null;
   for (const line of lines) {
-    if (!line.trim()) continue;
-    if (NUMBER_PREFIX.test(line) || TITLE_RE.test(line) || !current) {
-      current = [line];
+    if (!line.trim()) { if (current) current.ended = true; continue; }
+    const bare = isBareUrlLine(line);
+    const named = looksLikeCompanyName(line);
+    const startsNew = NUMBER_PREFIX.test(line) || TITLE_RE.test(line) || !current
+      || (current.ended && (named || bare))
+      || (bare && current.bareOnly)
+      || (named && current.nameOnly);
+    if (startsNew) {
+      current = { lines: [line], bareOnly: bare, nameOnly: named, ended: false };
       blocks.push(current);
     } else {
-      current.push(line);
+      current.lines.push(line);
+      if (!bare) current.bareOnly = false;
+      if (!named) current.nameOnly = false;
     }
   }
   const entries = [];
   let skipped = 0;
   for (const block of blocks) {
-    const raw = block.join('\n').trim();
+    const raw = block.lines.join('\n').trim();
     const hasSignal = /https?:\/\//.test(raw) || /【[^】]+】/.test(raw) || /(?:内推码|推荐码)/.test(raw);
-    if (!hasSignal) { skipped++; continue; }
+    if (!hasSignal) {
+      // 纯公司名列表：每行已在上面拆成独立块，保留为待补链接的草稿。
+      if (block.lines.every(line => looksLikeCompanyName(line))) {
+        entries.push(extractEntry(raw, makeId()));
+        continue;
+      }
+      skipped++;
+      continue;
+    }
     entries.push(extractEntry(raw, makeId()));
   }
   return { entries, skipped, total: entries.length };

@@ -52,6 +52,36 @@ test('无链接条目保留并警告，空输入安全返回', () => {
   assert.deepEqual(parseCompanies('随便一句说明').entries, []);
 });
 
+test('纯公司名列表各自建档，不静默丢弃', () => {
+  const { entries, skipped } = parseCompanies('示例甲公司\n示例乙公司\n示例丙公司');
+  assert.equal(skipped, 0);
+  assert.equal(entries.length, 3);
+  assert.deepEqual(entries.map(entry => entry.company), ['示例甲公司', '示例乙公司', '示例丙公司']);
+  assert.ok(entries.every(entry => entry.warnings.some(warning => warning.includes('未识别链接'))));
+});
+
+test('多行无编号链接各自建档；公司名加链接保持同一条', () => {
+  const bare = parseCompanies('https://alpha.example.invalid/jobs\nhttps://beta.example.invalid/campus');
+  assert.equal(bare.entries.length, 2);
+  assert.ok(bare.entries.every(entry => entry.links.length === 1));
+  const pair = parseCompanies('示例甲公司\nhttps://alpha.example.invalid/jobs');
+  assert.equal(pair.entries.length, 1);
+  assert.equal(pair.entries[0].company, '示例甲公司');
+  assert.equal(pair.entries[0].links.length, 1);
+  const titled = parseCompanies('【示例公司】\nhttps://alpha.example.invalid/jobs\nhttps://alpha.example.invalid/notice');
+  assert.equal(titled.entries.length, 1);
+  assert.equal(titled.entries[0].links.length, 2);
+});
+
+test('空行分隔的混合列表各自建档，码归属相邻链接条目', () => {
+  const mixed = parseCompanies('示例甲公司\n\nhttps://alpha.example.invalid/jobs\n\n内推码:TESTCODE01');
+  assert.equal(mixed.entries.length, 2);
+  assert.equal(mixed.entries[0].company, '示例甲公司');
+  assert.equal(mixed.entries[1].company, '');
+  assert.equal(mixed.entries[1].links.length, 1);
+  assert.equal(mixed.entries[1].referral.candidates[0], 'TESTCODE01');
+});
+
 test('公司名清理与去重键', () => {
   assert.equal(cleanCompanyName('新增外企示例宝可梦2027届校园招聘3D设计师岗位投递链接：'), '外企示例宝可梦');
   assert.equal(cleanCompanyName('示例公司 秋招'), '示例公司');
