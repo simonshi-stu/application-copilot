@@ -63,6 +63,7 @@ https://example.jobs.feishu.cn/s/abc123
 | 文档 | 用途 |
 |---|---|
 | [设计说明](docs/DESIGN.md) | 粘贴导入、类型识别、信息卡、字段分级、三遍质检、Agent 分工、状态去重 |
+| [项目计划](docs/PLAN.md) | 产品路线（MVP 先行）、类型识别打分、信息卡公式、实施阶段 |
 | [工作流与边界](docs/WORKFLOW.md) | 投递工作流、文案规则、模型能力范围、隐私与验收要求 |
 | [开发任务清单](docs/TASKS.md) | 分阶段任务与验收标准 |
 | [开发规则](AGENTS.md) | 编码 Agent 必须遵守的原文复制与权限限制 |
@@ -81,7 +82,7 @@ npm run serve     # 本地预览编辑器
 npm run parse-resume -- "本地简历.docx" "private/resume-parsed.json"
 ```
 
-测试数据全为虚构样例；`private/` 目录已被 Git 忽略，用于本机真实数据。
+测试数据全为虚构样例；所有本机数据与产物都放在项目目录内：`private/`（真实资料）、`artifacts/`（截图与生成数据），两者均已被 Git 忽略。
 
 ## 开发待办
 
