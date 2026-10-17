@@ -23,6 +23,12 @@ button.danger { border-color: #a14235; color: #a14235; }
 .file-label { font-size: 14px; }
 .file-label input { max-width: 260px; font-size: 13px; }
 .hint, .counter { font-size: 13px; color: #586d78; }
+.tabs { display: flex; gap: 8px; margin: 20px 0 0; }
+.tab { background: white; color: #24665e; border: 1px solid #24665e; }
+.tab.active { background: #24665e; color: white; }
+.tab:focus-visible { outline: 2px solid #174b45; outline-offset: 2px; }
+.entry-line { margin: 8px 0; }
+.conflict { color: #a14235; margin: 8px 0; }
 .block { border-top: 1px solid #d5dfe3; margin-top: 24px; padding-top: 20px; }
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .fields select { width: 100%; }

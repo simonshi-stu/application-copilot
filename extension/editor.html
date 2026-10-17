@@ -3,43 +3,71 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Application Copilot · 本地段落库</title>
+  <title>Application Copilot · 本地求职助手</title>
   <link rel="stylesheet" href="editor.css">
 </head>
 <body>
   <main>
-    <header><p class="eyebrow">APPLICATION COPILOT · 离线原文模式</p>
-      <h1>你确认内容，工具只负责复制。</h1>
-      <p>自动识别区域与经历 → 本人调整、确认 → 原文复制。项目简述／职责可先生成有来源的候选，确认后才使用。</p>
+    <header><p class="eyebrow">APPLICATION COPILOT · 本地优先</p>
+      <h1>你确认内容，工具只负责整理与复制。</h1>
+      <p>解析简历与公司清单、识别公司类型、生成待补充信息卡；填写用原文复制。全部在本机完成。</p>
     </header>
     <aside>资料仅保存在当前浏览器，不加密、不上传。不要输入密码、验证码或不必要的证件信息。本版不读取招聘页面、不自动填表、不代提交。</aside>
-    <section aria-labelledby="import-heading">
-      <h2 id="import-heading">1. 导入文字草稿</h2>
-      <label for="source">粘贴简历全文，自动识别个人信息、教育、实习、项目、技能、语言及个人评价；也可按空行简单分块。</label>
-      <textarea id="source" aria-label="简历原文草稿" rows="7" placeholder="粘贴实习或项目原文……"></textarea>
-      <div class="actions">
-        <button id="parse" type="button">自动解析简历区域</button>
-        <button id="split" type="button">按空行拆分并追加</button>
-        <label class="file-label">本地导入 <input id="file" aria-label="导入本地简历文件" type="file" accept=".txt,.md,.docx,.json"></label>
-      </div>
-      <p class="hint">支持本地 DOCX、TXT、MD 与本工具导出的 JSON；PDF 请粘贴已提取文本。解析不会上传材料；折行重建可能有误，原文保留供核对。</p>
-    </section>
-    <section id="profile-section" hidden aria-labelledby="profile-heading">
-      <h2 id="profile-heading">2. 结构化简历 · 全部待确认</h2>
-      <p>公司／地点／岗位与正文分别存储。缺失字段保持空白；项目岗位不默认“独立开发”。此处可调整名称等元数据，正文在段落库逐块审核。</p>
-      <div id="profile"></div>
-      <label><input id="include-candidates" type="checkbox">同时加入项目简述／职责候选（可能重复，须本人修改确认）</label>
-      <div class="actions">
-        <button id="add-profile" type="button">将结构化正文加入段落库</button>
-        <button id="export-profile" class="secondary" type="button">导出本地解析 JSON</button>
-      </div>
-    </section>
-    <section aria-labelledby="blocks-heading">
-      <div class="section-heading"><h2 id="blocks-heading">3. 整理并确认段落</h2><button id="clear" class="danger" type="button">清空本地资料</button></div>
-      <p>填写所属经历，选择栏目；可在同一块内加入空行、粘贴多个段落。任何修改都需要重新确认。</p>
-      <div id="blocks"></div>
-      <p id="empty">还没有段落。先粘贴文字并拆分。</p>
-    </section>
+    <nav class="tabs" aria-label="功能切换">
+      <button id="tab-blocks" class="tab active" type="button" aria-pressed="true">段落库</button>
+      <button id="tab-companies" class="tab" type="button" aria-pressed="false">公司与清单</button>
+    </nav>
+    <div id="panel-blocks">
+      <section aria-labelledby="import-heading">
+        <h2 id="import-heading">1. 导入文字草稿</h2>
+        <label for="source">粘贴简历全文，自动识别个人信息、教育、实习、项目、技能、语言及个人评价；也可按空行简单分块。</label>
+        <textarea id="source" aria-label="简历原文草稿" rows="7" placeholder="粘贴实习或项目原文……"></textarea>
+        <div class="actions">
+          <button id="parse" type="button">自动解析简历区域</button>
+          <button id="split" type="button">按空行拆分并追加</button>
+          <label class="file-label">本地导入 <input id="file" aria-label="导入本地简历文件" type="file" accept=".txt,.md,.docx,.json"></label>
+        </div>
+        <p class="hint">支持本地 DOCX、TXT、MD 与本工具导出的 JSON；PDF 请粘贴已提取文本。解析不会上传材料；折行重建可能有误，原文保留供核对。</p>
+      </section>
+      <section id="profile-section" hidden aria-labelledby="profile-heading">
+        <h2 id="profile-heading">2. 结构化简历 · 全部待确认</h2>
+        <p>公司／地点／岗位与正文分别存储。缺失字段保持空白；项目岗位不默认“独立开发”。此处可调整名称等元数据，正文在段落库逐块审核。</p>
+        <div id="profile"></div>
+        <label><input id="include-candidates" type="checkbox">同时加入项目简述／职责候选（可能重复，须本人修改确认）</label>
+        <div class="actions">
+          <button id="add-profile" type="button">将结构化正文加入段落库</button>
+          <button id="export-profile" class="secondary" type="button">导出本地解析 JSON</button>
+        </div>
+      </section>
+      <section aria-labelledby="blocks-heading">
+        <div class="section-heading"><h2 id="blocks-heading">3. 整理并确认段落</h2><button id="clear" class="danger" type="button">清空本地资料</button></div>
+        <p>填写所属经历，选择栏目；可在同一块内加入空行、粘贴多个段落。任何修改都需要重新确认。</p>
+        <div id="blocks"></div>
+        <p id="empty">还没有段落。先粘贴文字并拆分。</p>
+      </section>
+    </div>
+    <div id="panel-companies" hidden>
+      <section aria-labelledby="companies-heading">
+        <h2 id="companies-heading">1. 粘贴公司与内推信息</h2>
+        <label for="company-source">支持群消息、文档表格、链接列表等任意格式；没有内推码也能用。解析与识别全部在本机完成，不联网。</label>
+        <textarea id="company-source" aria-label="公司与内推信息原文" rows="8" placeholder="示例（虚构）：1️⃣【示例公司 秋招】https://app.mokahr.com/m/campus_apply/example/12345?recommendCode=TESTCODE99#/jobs 内推码:TESTCODE99"></textarea>
+        <div class="actions">
+          <button id="parse-companies" type="button">解析并生成信息卡</button>
+          <button id="clear-company-source" class="secondary" type="button">清空输入</button>
+          <label class="file-label">导入 JSON <input id="import-companies" aria-label="导入公司与清单 JSON" type="file" accept=".json,application/json"></label>
+          <button id="export-companies" class="secondary" type="button">导出 JSON</button>
+        </div>
+        <p class="hint">解析结果只是草稿：公司名、类型、链接、内推码都可以改，改动自动保存在本机。内推码冲突时两个都保留，等待人工核实，不自动选定。</p>
+      </section>
+      <section aria-labelledby="company-list-heading">
+        <div class="section-heading">
+          <h2 id="company-list-heading">2. 清单与信息卡</h2>
+          <button id="clear-companies" class="danger" type="button">清空清单</button>
+        </div>
+        <div id="company-list"></div>
+        <p id="companies-empty">还没有条目。先粘贴内容并点击解析。</p>
+      </section>
+    </div>
     <p id="status" role="status" aria-live="polite"></p>
   </main>
   <script type="module" src="editor.js"></script>

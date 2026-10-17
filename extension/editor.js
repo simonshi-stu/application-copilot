@@ -1,13 +1,20 @@
 import { KINDS, splitDrafts, reviseBlock, approveBlock, textForCopy } from './blocks.js';
 import { parseResume, resumeBlocks, validateResume } from './resume-parser.js';
 import { extractDocx } from './docx.js';
+import { parseCompanies, companyKey } from './company-parser.js';
+import { COMPANY_TYPES, classifyCompany, setType } from './company-classifier.js';
+import { buildFieldCard, profileSummaryFromResume } from './field-cards.js';
 
 const KEY = 'applicationCopilot.blocks.v1';
 const PROFILE_KEY = 'applicationCopilot.resume.v1';
+const COMPANIES_KEY = 'applicationCopilot.companies.v1';
+const ALIASES_KEY = 'applicationCopilot.companyAliases.v1';
 const $ = id => document.getElementById(id);
 const extensionStorage = globalThis.chrome?.storage?.local;
 let blocks = [];
 let profile = null;
+let companies = [];
+let aliases = {};
 let sourceName = '粘贴文本';
 let storageQueue = Promise.resolve();
 
@@ -16,12 +23,17 @@ function notify(message) { $('status').textContent = message; }
 function persist() {
   const snapshot = structuredClone(blocks);
   const profileSnapshot = structuredClone(profile);
+  const companiesSnapshot = structuredClone(companies);
+  const aliasesSnapshot = structuredClone(aliases);
   // Serialize writes so rapid edits cannot restore an older version.
   const write = storageQueue.then(async () => {
-    if (extensionStorage) await extensionStorage.set({ [KEY]: snapshot, [PROFILE_KEY]: profileSnapshot });
-    else {
+    if (extensionStorage) {
+      await extensionStorage.set({ [KEY]: snapshot, [PROFILE_KEY]: profileSnapshot, [COMPANIES_KEY]: companiesSnapshot, [ALIASES_KEY]: aliasesSnapshot });
+    } else {
       localStorage.setItem(KEY, JSON.stringify(snapshot));
       localStorage.setItem(PROFILE_KEY, JSON.stringify(profileSnapshot));
+      localStorage.setItem(COMPANIES_KEY, JSON.stringify(companiesSnapshot));
+      localStorage.setItem(ALIASES_KEY, JSON.stringify(aliasesSnapshot));
     }
   });
   storageQueue = write.catch(() => {});
@@ -181,6 +193,185 @@ function render() {
   }
 }
 
+function showTab(name) {
+  const blocksActive = name === 'blocks';
+  $('panel-blocks').hidden = !blocksActive;
+  $('panel-companies').hidden = blocksActive;
+  $('tab-blocks').classList.toggle('active', blocksActive);
+  $('tab-companies').classList.toggle('active', !blocksActive);
+  $('tab-blocks').setAttribute('aria-pressed', String(blocksActive));
+  $('tab-companies').setAttribute('aria-pressed', String(!blocksActive));
+}
+
+function applyClassification(entry) {
+  entry.type = classifyCompany(entry, { aliases });
+}
+
+function renderCompanies() {
+  const list = $('company-list');
+  list.replaceChildren();
+  $('companies-empty').hidden = companies.length > 0;
+  for (const entry of companies) {
+    const card = element('article', undefined, 'block');
+    const heading = element('div', undefined, 'section-heading');
+    const title = element('h3', entry.company || '未命名条目');
+    const badge = element('span', '', 'badge');
+    heading.append(title, badge);
+    card.append(heading);
+    const typeInfo = entry.type || { type: 'other', confidence: 0.2, reasons: [] };
+    badge.textContent = `${COMPANY_TYPES[typeInfo.type] || COMPANY_TYPES.other} · 置信 ${Math.round((typeInfo.confidence ?? 0) * 100)}%`;
+    const meta = [`识别依据：${(typeInfo.reasons || []).join('；') || '无'}`];
+    if (entry.platform && entry.platform !== 'none') meta.push(`平台：${entry.platform}`);
+    if (entry.batch) meta.push(`批次：${entry.batch}`);
+    if (entry.deadline) meta.push(entry.deadline);
+    card.append(element('p', meta.join(' ｜ '), 'hint'));
+
+    const fields = element('div', undefined, 'fields');
+    const nameInput = element('input'); nameInput.type = 'text'; nameInput.value = entry.company;
+    nameInput.addEventListener('input', () => {
+      entry.company = nameInput.value;
+      title.textContent = entry.company || '未命名条目';
+      persist().catch(() => notify('本地保存失败。'));
+    });
+    const typeSelect = element('select');
+    for (const [value, label] of Object.entries(COMPANY_TYPES)) {
+      const option = element('option', label); option.value = value; typeSelect.append(option);
+    }
+    typeSelect.value = typeInfo.type;
+    typeSelect.addEventListener('change', () => {
+      entry.type = setType(entry, typeSelect.value, aliases);
+      persist().then(() => { renderCompanies(); notify('类型已更新，并记住你的选择（仅本机）。'); })
+        .catch(() => notify('本地保存失败。'));
+    });
+    fields.append(labeled('公司名（可改）', nameInput), labeled('类型（可改）', typeSelect));
+    card.append(fields);
+
+    const linksArea = element('textarea'); linksArea.rows = Math.max(2, entry.links.length);
+    linksArea.value = entry.links.map(link => link.url).join('\n');
+    linksArea.addEventListener('input', () => {
+      const previous = entry.links;
+      entry.links = linksArea.value.split('\n').map(url => url.trim()).filter(Boolean)
+        .map((url, index) => ({ url, kind: previous[index]?.kind || 'apply' }));
+      persist().catch(() => notify('本地保存失败。'));
+    });
+    card.append(labeled('链接（每行一个，可改）', linksArea));
+
+    if (entry.referral?.conflict && entry.referral.candidates.length > 1) {
+      card.append(element('p', `⚠ 检测到多个不同内推码：${entry.referral.candidates.join(' / ')}——待人工核实，未自动选定。`, 'conflict'));
+    }
+    const codeRow = element('div', undefined, 'fields');
+    const codeInput = element('input'); codeInput.type = 'text'; codeInput.value = entry.referral?.code || '';
+    codeInput.addEventListener('input', () => {
+      const value = codeInput.value.trim();
+      entry.referral = { ...(entry.referral || {}), code: value, conflict: false, verified: false, candidates: value ? [value] : [] };
+      persist().catch(() => notify('本地保存失败。'));
+    });
+    const channelInput = element('input'); channelInput.type = 'text'; channelInput.value = entry.channelHint || '';
+    channelInput.addEventListener('input', () => {
+      entry.channelHint = channelInput.value;
+      persist().catch(() => notify('本地保存失败。'));
+    });
+    codeRow.append(labeled('内推码（没有可留空）', codeInput), labeled('渠道提示', channelInput));
+    card.append(codeRow);
+
+    const fieldCard = buildFieldCard(typeInfo.type, profileSummaryFromResume(profile));
+    card.append(element('p', `需你补充：${fieldCard.ask.join('、') || '无'}`, 'entry-line'));
+    const reuse = element('details');
+    reuse.append(element('summary', `将直接复用（${fieldCard.reuse.length} 项）`), element('p', fieldCard.reuse.join('、')));
+    const verify = element('details');
+    verify.append(element('summary', `需官网核实（${fieldCard.verify.length} 项）`), element('p', fieldCard.verify.join('、') || '无'));
+    const raw = element('details');
+    raw.append(element('summary', '查看原文'), element('pre', entry.rawSource));
+    card.append(reuse, verify, raw);
+    for (const warning of entry.warnings || []) card.append(element('p', warning, 'hint'));
+
+    const actions = element('div', undefined, 'actions');
+    const remove = element('button', '删除此条', 'danger'); remove.type = 'button';
+    remove.addEventListener('click', async () => {
+      if (!confirm('删除此公司条目？')) return;
+      companies = companies.filter(candidate => candidate.id !== entry.id);
+      try { await persist(); renderCompanies(); notify('已删除。'); }
+      catch { notify('删除未保存成功，请重试。'); }
+    });
+    actions.append(remove);
+    card.append(actions);
+    list.append(card);
+  }
+}
+
+$('tab-blocks').addEventListener('click', () => showTab('blocks'));
+$('tab-companies').addEventListener('click', () => showTab('companies'));
+
+$('parse-companies').addEventListener('click', async () => {
+  try {
+    const { entries, skipped } = parseCompanies($('company-source').value);
+    if (!entries.length) throw new Error('没有解析到公司条目，请检查粘贴内容。');
+    const existing = new Set(companies.map(companyKey));
+    let added = 0; let duplicate = 0;
+    for (const entry of entries) {
+      if (existing.has(companyKey(entry))) { duplicate++; continue; }
+      applyClassification(entry);
+      companies.push(entry);
+      existing.add(companyKey(entry));
+      added++;
+    }
+    await persist(); renderCompanies();
+    notify(`解析出 ${entries.length} 家公司：新增 ${added} 条${duplicate ? `，跳过重复 ${duplicate} 条` : ''}${skipped ? `，忽略说明文字 ${skipped} 段` : ''}。请核对并修改。`);
+  } catch (error) { notify(error.message); }
+});
+$('clear-company-source').addEventListener('click', () => { $('company-source').value = ''; });
+$('clear-companies').addEventListener('click', async () => {
+  if (!confirm('清空全部公司与清单条目？此操作不可恢复。')) return;
+  companies = [];
+  try { await persist(); renderCompanies(); notify('清单已清空。'); }
+  catch { notify('清空未保存成功，请重试。'); }
+});
+$('export-companies').addEventListener('click', () => {
+  if (!companies.length) return notify('清单为空，没有可导出的内容。');
+  const payload = { schema: 'application-copilot.companies.v1', exportedAt: new Date().toISOString(), companies };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+  const link = element('a'); link.href = url; link.download = 'companies.json'; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  notify('已导出本地 JSON；文件可能包含你的内推信息，请勿公开分享。');
+});
+$('import-companies').addEventListener('change', async event => {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  try {
+    if (file.size > 4 * 1024 * 1024) throw new Error('文件过大。');
+    const data = JSON.parse(await file.text());
+    const list = Array.isArray(data) ? data : data?.companies;
+    if (!Array.isArray(list)) throw new Error('不是有效的公司清单 JSON。');
+    const existing = new Set(companies.map(companyKey));
+    let added = 0;
+    for (const raw of list) {
+      if (!raw || typeof raw.company !== 'string' || !Array.isArray(raw.links)) continue;
+      const entry = {
+        id: typeof raw.id === 'string' ? raw.id : crypto.randomUUID(),
+        company: raw.company,
+        links: raw.links.filter(link => link && typeof link.url === 'string').map(link => ({ url: link.url, kind: link.kind || 'apply' })),
+        platform: typeof raw.platform === 'string' ? raw.platform : 'none',
+        referral: raw.referral && typeof raw.referral === 'object'
+          ? { code: String(raw.referral.code || ''), candidates: Array.isArray(raw.referral.candidates) ? raw.referral.candidates.map(String) : [], conflict: Boolean(raw.referral.conflict), type: String(raw.referral.type || 'unknown'), verified: Boolean(raw.referral.verified) }
+          : { code: '', candidates: [], conflict: false, type: 'none', verified: false },
+        channelHint: typeof raw.channelHint === 'string' ? raw.channelHint : '',
+        batch: typeof raw.batch === 'string' ? raw.batch : '',
+        deadline: typeof raw.deadline === 'string' ? raw.deadline : '',
+        warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
+        status: 'new',
+        rawSource: typeof raw.rawSource === 'string' ? raw.rawSource : '',
+      };
+      if (existing.has(companyKey(entry))) continue;
+      if (raw.type && typeof raw.type === 'object' && Object.hasOwn(COMPANY_TYPES, raw.type.type)) entry.type = raw.type;
+      else applyClassification(entry);
+      companies.push(entry); existing.add(companyKey(entry)); added++;
+    }
+    await persist(); renderCompanies();
+    notify(`已导入 ${added} 条；重复或无效条目已跳过。`);
+  } catch (error) { notify(error.message); }
+});
+
 $('split').addEventListener('click', async () => {
   const drafts = splitDrafts($('source').value);
   if (!drafts.length) return notify('请先粘贴文本。');
@@ -262,8 +453,21 @@ try {
     catch { return reviseBlock(block, {}); }
   });
   render(); renderProfile();
+  const savedCompanies = extensionStorage ? (await extensionStorage.get(COMPANIES_KEY))[COMPANIES_KEY] : JSON.parse(localStorage.getItem(COMPANIES_KEY) || '[]');
+  const savedAliases = extensionStorage ? (await extensionStorage.get(ALIASES_KEY))[ALIASES_KEY] : JSON.parse(localStorage.getItem(ALIASES_KEY) || '{}');
+  if (savedCompanies !== undefined && !Array.isArray(savedCompanies)) throw new Error('本地清单格式异常。');
+  companies = (savedCompanies || []).map(entry => {
+    if (!entry || typeof entry.id !== 'string' || typeof entry.company !== 'string'
+      || !Array.isArray(entry.links) || typeof entry.rawSource !== 'string') {
+      throw new Error('本地清单条目格式异常，不自动覆盖。');
+    }
+    return entry;
+  });
+  aliases = (savedAliases && typeof savedAliases === 'object' && !Array.isArray(savedAliases)) ? savedAliases : {};
+  renderCompanies();
 } catch (error) {
-  $('split').disabled = true;
-  $('parse').disabled = true; $('add-profile').disabled = true; $('file').disabled = true;
+  for (const id of ['split', 'parse', 'add-profile', 'file', 'parse-companies', 'import-companies', 'export-companies']) {
+    if ($(id)) $(id).disabled = true;
+  }
   notify(`${error.message} 已禁用追加以免覆盖，请核查存储或明确选择清空。`);
 }
