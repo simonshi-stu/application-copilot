@@ -2,6 +2,8 @@
 // 已确认可复用 / 已识别待确认 / 待本人补充 / 需官网核实 / 部分单位可能要求。
 // 可能要求的字段只是提示，不代表网站必填，也不会提前收集敏感信息。
 
+import { factsSummary } from './profile-facts.js';
+
 export const INDUSTRY_TEMPLATES = Object.freeze({
   bank: {
     ask: ['意向分行/城市'],
@@ -65,11 +67,12 @@ export function pendingSummaryFromResume(profile) {
   return parts;
 }
 
-export function buildFieldCard(industry, { profile = null, blocks = [] } = {}) {
+export function buildFieldCard(industry, { profile = null, blocks = [], facts = [] } = {}) {
   const template = INDUSTRY_TEMPLATES[industry] || INDUSTRY_TEMPLATES.other;
+  const summary = factsSummary(facts);
   return {
-    reuse: approvedSummaryFromBlocks(blocks),
-    pending: pendingSummaryFromResume(profile),
+    reuse: [...approvedSummaryFromBlocks(blocks), ...summary.confirmed.map(text => `${text}（已确认）`)],
+    pending: [...pendingSummaryFromResume(profile), ...summary.unconfirmed.map(text => `${text}（待确认）`)],
     ask: [...template.ask],
     verify: [...VERIFY_COMMON],
     possible: [...template.possible],

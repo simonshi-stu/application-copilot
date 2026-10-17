@@ -15,6 +15,7 @@
       </div>
       <nav class="side-nav" aria-label="功能切换">
         <button id="tab-companies" class="side-nav-item active" type="button" aria-pressed="true">公司与清单</button>
+        <button id="tab-profile" class="side-nav-item" type="button" aria-pressed="false">我的资料</button>
         <button id="tab-blocks" class="side-nav-item" type="button" aria-pressed="false">简历与段落</button>
       </nav>
       <div class="sidebar-foot">
@@ -70,6 +71,20 @@
               <p id="companies-empty" class="hint" style="padding: 0 12px 12px;">还没有条目。展开上方「粘贴导入」开始；解析结果只作草稿。</p>
             </div>
             <aside id="company-detail" class="detail-pane" aria-label="当前公司详情"></aside>
+          </div>
+        </section>
+      </div>
+      <div id="panel-profile" hidden>
+        <section aria-labelledby="facts-heading">
+          <div class="section-heading">
+            <h2 id="facts-heading">我的资料</h2>
+            <span class="badge">只有「已确认」字段会计入可复用</span>
+          </div>
+          <p class="hint">存放填写时反复用到的个人信息。新增或导入后默认「待确认」；确认后才进入公司详情信息卡的「已确认可复用」。证件类等敏感信息如非必要，不要放在这里。</p>
+          <div id="fact-list"></div>
+          <div class="actions">
+            <button id="add-fact" type="button">新增字段</button>
+            <button id="import-facts" class="secondary" type="button">从已解析简历导入（全部为待确认）</button>
           </div>
         </section>
       </div>

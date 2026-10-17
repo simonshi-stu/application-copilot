@@ -4,6 +4,8 @@ import { extractDocx } from './docx.js';
 import { parseCompanies, companyKey } from './company-parser.js';
 import { INDUSTRIES, NATURES, classifyCompany, setIndustry } from './company-classifier.js';
 import { buildFieldCard } from './field-cards.js';
+import { factsFromResume, makeFact, validateFacts } from './profile-facts.js';
+import { STAGES, STAGE_FLOW, buildReviewSheet } from './review-sheet.js';
 import { KEYS, loadAll, saveAll, migrateCompanies } from './storage.js';
 
 const $ = id => document.getElementById(id);
@@ -12,6 +14,7 @@ let profile = null;
 let companies = [];
 let companiesUnknown = [];
 let aliases = {};
+let facts = [];
 let sourceName = '粘贴文本';
 let selectedCompanyId = null;
 let companyFilter = { text: '', status: 'all' };
@@ -35,7 +38,7 @@ function persistedLabel() {
 function persist() {
   // Serialize writes so rapid edits cannot restore an older version.
   setSaveState('保存中…', 'saving');
-  const write = persistBusy.then(() => saveAll({ blocks, profile, companies, aliases, companiesUnknown }));
+  const write = persistBusy.then(() => saveAll({ blocks, profile, companies, aliases, companiesUnknown, facts }));
   persistBusy = write.catch(() => {});
   return write.then(
     result => { setSaveState(persistedLabel(), 'saved'); return result; },
@@ -111,6 +114,42 @@ function renderProfile() {
   }
   for (const warning of profile.warnings) $('profile').append(element('p', warning, 'hint'));
   const original = element('details'); original.append(element('summary', '查看完整提取原文'), element('pre', profile.source.text)); $('profile').append(original);
+}
+
+function renderFacts() {
+  const list = $('fact-list');
+  list.replaceChildren();
+  if (!facts.length) {
+    list.append(element('p', '还没有资料字段。可以点下方按钮新增，或从已解析简历导入。', 'hint'));
+    return;
+  }
+  for (const fact of facts) {
+    const row = element('div', undefined, 'fact-row');
+    const label = element('input'); label.type = 'text'; label.value = fact.label; label.placeholder = '字段名';
+    label.addEventListener('input', () => { fact.label = label.value; persist().catch(() => notify('本地保存失败。')); });
+    const value = element('input'); value.type = 'text'; value.value = fact.value; value.placeholder = '内容';
+    value.addEventListener('input', () => { fact.value = value.value; persist().catch(() => notify('本地保存失败。')); });
+    const confirmed = fact.status === 'confirmed';
+    const status = element('button', confirmed ? '已确认' : '待确认', `button-mini ${confirmed ? '' : 'secondary'}`.trim());
+    status.type = 'button';
+    status.addEventListener('click', async () => {
+      fact.status = confirmed ? 'unconfirmed' : 'confirmed';
+      try {
+        await persist(); renderFacts();
+        notify(fact.status === 'confirmed'
+          ? '已确认该字段；公司信息卡会将其计入「已确认可复用」。'
+          : '已取消确认，字段回到「已识别待确认」。');
+      } catch { notify('保存失败，请重试。'); }
+    });
+    const remove = element('button', '删除', 'button-mini danger'); remove.type = 'button';
+    remove.addEventListener('click', async () => {
+      if (!confirm(`删除字段「${fact.label || '未命名'}」？`)) return;
+      facts = facts.filter(item => item.id !== fact.id);
+      try { await persist(); renderFacts(); } catch { notify('删除未保存成功。'); }
+    });
+    row.append(label, value, status, remove);
+    list.append(row);
+  }
 }
 
 function render() {
@@ -196,14 +235,16 @@ function render() {
   }
 }
 
+const PANELS = { companies: 'panel-companies', profile: 'panel-profile', blocks: 'panel-blocks' };
+
 function showTab(name) {
-  const blocksActive = name === 'blocks';
-  $('panel-blocks').hidden = !blocksActive;
-  $('panel-companies').hidden = blocksActive;
-  $('tab-blocks').classList.toggle('active', blocksActive);
-  $('tab-companies').classList.toggle('active', !blocksActive);
-  $('tab-blocks').setAttribute('aria-pressed', String(blocksActive));
-  $('tab-companies').setAttribute('aria-pressed', String(!blocksActive));
+  for (const [key, id] of Object.entries(PANELS)) {
+    const active = key === name;
+    $(id).hidden = !active;
+    const button = $(`tab-${key}`);
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  }
 }
 
 function toStoredIndustry(result) {
@@ -230,13 +271,19 @@ function entryHasIssues(entry) {
   return Boolean((entry.warnings && entry.warnings.length) || entry.referral?.conflict || !entry.company);
 }
 
+function unansweredAsks(entry) {
+  const ask = buildFieldCard(entry.industry?.value || 'other', { profile, blocks, facts }).ask;
+  return ask.filter(item => !String(entry.answers?.[item] || '').trim()).length;
+}
+
 function nextAction(entry) {
   if (!entry.company) return '补充公司名';
   if (!entry.links || !entry.links.length) return '补充链接';
   if (entry.referral?.conflict && !entry.referral?.selected) return '选择内推码';
-  if (entry.review === 'confirmed') return '按官网核对后填写';
-  if (entry.review === 'needs_review') return '逐项核对';
-  return '核对并确认';
+  const unanswered = unansweredAsks(entry);
+  if (unanswered) return `补充公司信息（${unanswered} 项）`;
+  if (entry.review !== 'confirmed') return '核对并确认';
+  return STAGE_FLOW[entry.stage || 'todo'] || '生成送审单';
 }
 
 function touchEntry(entry) {
@@ -257,6 +304,7 @@ function renderCompanyRows() {
   $('companies-empty').hidden = companies.length > 0;
   for (const entry of visible) {
     const row = element('tr');
+    row.dataset.companyId = entry.id;
     if (entry.id === selectedCompanyId) row.classList.add('selected');
     row.tabIndex = 0;
     const nameCell = element('td');
@@ -329,7 +377,13 @@ function renderCompanyDetail() {
   const directionInput = element('input'); directionInput.type = 'text'; directionInput.value = entry.direction || '';
   directionInput.placeholder = '如：开发／数据／产品／运营';
   directionInput.addEventListener('input', () => { entry.direction = directionInput.value; touch(); saved(); });
-  basics.append(labeled('公司名（可改）', nameInput), labeled('行业建议（可改）', industrySelect), labeled('企业性质', natureSelect), labeled('岗位方向（自填）', directionInput));
+  const stageSelect = element('select');
+  for (const [value, stageLabel] of Object.entries(STAGES)) {
+    const option = element('option', stageLabel); option.value = value; stageSelect.append(option);
+  }
+  stageSelect.value = entry.stage || 'todo';
+  stageSelect.addEventListener('change', () => { entry.stage = stageSelect.value; saved(); renderCompanyRows(); });
+  basics.append(labeled('公司名（可改）', nameInput), labeled('行业建议（可改）', industrySelect), labeled('企业性质', natureSelect), labeled('岗位方向（自填）', directionInput), labeled('进度（手动更新）', stageSelect));
   pane.append(basics);
 
   if (entry.industry) {
@@ -394,7 +448,7 @@ function renderCompanyDetail() {
   if (entry.deadline) metaLine.push(entry.deadline);
   if (metaLine.length) pane.append(element('p', metaLine.join(' ｜ '), 'hint'));
 
-  const cardData = buildFieldCard(entry.industry?.value || 'other', { profile, blocks });
+  const cardData = buildFieldCard(entry.industry?.value || 'other', { profile, blocks, facts });
   const card = element('div', undefined, 'field-card');
   card.append(element('h4', '信息卡'));
   const group = (titleText, items, fallback, className) => {
@@ -411,7 +465,26 @@ function renderCompanyDetail() {
   };
   card.append(group('已确认可复用', cardData.reuse, '暂无已确认内容：只有「段落库」里确认过的段落才会出现在这里。', 'fc-group fc-reuse'));
   card.append(group('已识别待确认', cardData.pending, '尚未导入结构化简历；解析结果不会自动视为可复用。', 'fc-group fc-pending'));
-  card.append(group('待本人补充（逐公司确认）', cardData.ask, '无', 'fc-group fc-ask'));
+  const answeredCount = cardData.ask.filter(item => String(entry.answers?.[item] || '').trim()).length;
+  const askBox = element('div', undefined, 'fc-group fc-ask');
+  askBox.append(element('p', `待本人补充（逐公司确认 ${answeredCount}/${cardData.ask.length}）`, 'card-title'));
+  if (cardData.ask.length) {
+    for (const item of cardData.ask) {
+      const input = element('input'); input.type = 'text'; input.value = entry.answers?.[item] || '';
+      input.addEventListener('input', () => {
+        entry.answers = entry.answers || {};
+        entry.answers[item] = input.value;
+        touch();
+        refreshRowNext(entry);
+        persist().catch(() => notify('本地保存失败，请勿关闭页面。'));
+      });
+      askBox.append(labeled(item, input));
+    }
+    askBox.append(element('p', '这些回答只用于本公司与本批次，不会跨公司复用。', 'hint'));
+  } else {
+    askBox.append(element('p', '该行业无固定补充项。', 'hint'));
+  }
+  card.append(askBox);
   card.append(group('需官网核实', cardData.verify, '无', 'fc-group fc-verify'));
   if (cardData.possible.length) {
     const possible = element('details');
@@ -446,7 +519,15 @@ function renderCompanyDetail() {
     try { await persist(); renderCompanies(); notify('已删除。'); }
     catch { notify('删除未保存成功，请重试。'); }
   });
-  actions.append(confirmButton, remove);
+  const sheetButton = element('button', '复制送审单', 'secondary'); sheetButton.type = 'button';
+  sheetButton.addEventListener('click', async () => {
+    try {
+      const text = buildReviewSheet(entry, { profile, blocks, facts });
+      await navigator.clipboard.writeText(text);
+      notify('送审单已复制；请按清单在官网核对，最终提交由你本人点击。');
+    } catch (error) { notify(`复制失败：${error.message}`); }
+  });
+  actions.append(confirmButton, sheetButton, remove);
   pane.append(actions);
 }
 
@@ -455,8 +536,35 @@ function renderCompanies() {
   renderCompanyDetail();
 }
 
+// 局部刷新某一行「下一步」，避免输入时整表重绘、丢失焦点。
+function refreshRowNext(entry) {
+  const row = document.querySelector(`#company-rows tr[data-company-id="${entry.id}"]`);
+  if (!row || row.children.length < 4) return;
+  const cell = row.children[3];
+  const action = nextAction(entry);
+  cell.textContent = action;
+  cell.className = /补充|选择/.test(action) ? 'next-blocking' : 'next';
+}
+
 $('tab-blocks').addEventListener('click', () => showTab('blocks'));
 $('tab-companies').addEventListener('click', () => showTab('companies'));
+$('tab-profile').addEventListener('click', () => showTab('profile'));
+
+$('add-fact').addEventListener('click', async () => {
+  facts.push(makeFact('', ''));
+  try { await persist(); renderFacts(); } catch { notify('本地保存失败。'); }
+});
+$('import-facts').addEventListener('click', async () => {
+  try {
+    if (!profile) throw new Error('请先在「简历与段落」里解析或导入简历，再导入字段。');
+    const incoming = factsFromResume(profile)
+      .filter(item => !facts.some(fact => fact.label === item.label && fact.value === item.value));
+    if (!incoming.length) return notify('没有可新增的字段（可能已导入过）。');
+    facts.push(...incoming);
+    await persist(); renderFacts();
+    notify(`已导入 ${incoming.length} 个字段，全部为「待确认」；请逐项核对后确认。`);
+  } catch (error) { notify(error.message); }
+});
 
 $('parse-companies').addEventListener('click', async () => {
   try {
@@ -486,6 +594,8 @@ $('parse-companies').addEventListener('click', async () => {
         nature: 'unknown',
         direction: '',
         industry: null,
+        answers: {},
+        stage: 'todo',
         rawSource: raw.rawSource,
       };
       if (existing.has(companyKey(entry))) { duplicate++; continue; }
@@ -629,9 +739,10 @@ try {
   companiesUnknown = Array.isArray(stored.companiesUnknown) ? stored.companiesUnknown : [];
   if (migrated.unknown.length) companiesUnknown = [...companiesUnknown, ...migrated.unknown];
   aliases = (stored.aliases && typeof stored.aliases === 'object' && !Array.isArray(stored.aliases)) ? stored.aliases : {};
+  facts = validateFacts(stored.facts);
   for (const entry of companies) if (!entry.industry) applyClassification(entry);
   selectedCompanyId = companies.length ? companies[0].id : null;
-  render(); renderProfile(); renderCompanies();
+  render(); renderProfile(); renderFacts(); renderCompanies();
   if (migrated.unknown.length) {
     notify(`${migrated.unknown.length} 条旧数据未能识别，已原样保留在本地（不会被覆盖或删除）。`);
   }

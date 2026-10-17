@@ -164,6 +164,9 @@ pre {
 .fc-pending { border-left-color: var(--warn); }
 .fc-ask { border-left-color: var(--primary); }
 .fc-verify { border-left-color: #8a9a95; }
+.fact-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(160px, 1.6fr) auto auto; gap: 8px; align-items: center; margin: 8px 0; }
+.fact-row input { width: 100%; }
+.button-mini { padding: 5px 10px; font-size: 13px; }
 @media (max-width: 980px) {
   .app { grid-template-columns: 1fr; }
   .sidebar {

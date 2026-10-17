@@ -1,6 +1,7 @@
 // 统一本地存储边界：串行写入、逐键读取、旧数据迁移。
 // chrome.storage.local 优先，普通页面回退 localStorage。不联网、不清理未知数据。
 import { INDUSTRIES, NATURES } from './company-classifier.js';
+import { STAGES } from './review-sheet.js';
 
 const extensionStorage = globalThis.chrome?.storage?.local;
 
@@ -10,6 +11,7 @@ export const KEYS = {
   companies: 'applicationCopilot.companies.v1',
   aliases: 'applicationCopilot.companyAliases.v1',
   companiesUnknown: 'applicationCopilot.companies.unknownRaw.v1',
+  facts: 'applicationCopilot.profileFacts.v1',
 };
 
 let queue = Promise.resolve();
@@ -22,10 +24,10 @@ async function readKey(key) {
 }
 
 export async function loadAll() {
-  const [blocks, profile, companies, aliases, companiesUnknown] = await Promise.all(
+  const [blocks, profile, companies, aliases, companiesUnknown, facts] = await Promise.all(
     Object.values(KEYS).map(readKey),
   );
-  return { blocks, profile, companies, aliases, companiesUnknown };
+  return { blocks, profile, companies, aliases, companiesUnknown, facts };
 }
 
 export function saveAll(data = {}) {
@@ -35,6 +37,7 @@ export function saveAll(data = {}) {
     companies: data.companies ?? [],
     aliases: data.aliases ?? {},
     companiesUnknown: data.companiesUnknown ?? [],
+    facts: data.facts ?? [],
   });
   const write = queue.then(async () => {
     if (extensionStorage) await extensionStorage.set(snapshot);
@@ -118,6 +121,10 @@ export function migrateCompanies(raw) {
       nature: typeof item.nature === 'string' && Object.hasOwn(NATURES, item.nature) ? item.nature : 'unknown',
       direction: typeof item.direction === 'string' ? item.direction : '',
       industry,
+      answers: item.answers && typeof item.answers === 'object' && !Array.isArray(item.answers)
+        ? Object.fromEntries(Object.entries(item.answers).filter(([key, value]) => typeof key === 'string' && typeof value === 'string'))
+        : {},
+      stage: Object.hasOwn(STAGES, item.stage) ? item.stage : 'todo',
       rawSource: typeof item.rawSource === 'string' ? item.rawSource : '',
     });
   }

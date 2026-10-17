@@ -44,3 +44,14 @@ test('行业模板只给可能字段，未知行业回退通用', () => {
   assert.deepEqual(unknown.ask, other.ask);
   assert.deepEqual(unknown.possible, []);
 });
+
+test('资料库字段按确认状态分流：确认才可复用', () => {
+  const facts = [
+    { id: '1', label: '姓名', value: '测试同学', status: 'confirmed' },
+    { id: '2', label: '电话', value: '19900000000', status: 'unconfirmed' },
+  ];
+  const card = buildFieldCard('bank', { profile: null, blocks: [], facts });
+  assert.ok(card.reuse.some(item => item.includes('姓名') && item.includes('已确认')));
+  assert.ok(card.pending.some(item => item.includes('电话') && item.includes('待确认')));
+  assert.ok(!card.reuse.some(item => item.includes('电话')));
+});
