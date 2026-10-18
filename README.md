@@ -2,19 +2,15 @@
 
 面向不同求职者的本地优先申请准备工作台（开发中）：整理简历与公司清单、审核候选信息、原样复制确认文本。不绑定特定用户、公司或模型；不代登录、不代最终提交。
 
-## 下一版本目标：准确性修复＋轻量工作台
+## 在线演示
 
-保留原生 JavaScript 和已有简历解析能力，参考 [Tabler](https://github.com/tabler/tabler) 的信息布局，改为「公司列表＋当前公司详情」，不进行 React／Next.js 迁移。
+- GitHub Pages：<https://simonshi-stu.github.io/application-copilot/>（默认进入「公司与清单」；数据只保存在访问者自己的浏览器）
+- 本地运行：`npm run serve` → <http://127.0.0.1:4173/extension/editor.html>
+- 浏览器扩展：Chrome / Edge 开发者模式加载 `extension/` 目录
 
-- 先修复无资料也显示可复用、冲突内推码默认选第一项、纯公司名／纯链接列表拆分的问题。
-- 区分草稿、待核实与本人确认；自动保存草稿不等于确认，更不等于官网绑定或投递成功。
-- 资料卡区分已确认可复用、已识别待确认、待补充、来源待核实。行业模板仅供提示，不能把可能字段冒充网站必填项。
-- 桌面使用紧凑表格＋详情区，移动端单列切换；保留简历段落库、原文来源及本地导入导出。
-- 先给用户可试用页面，只补关键问题的小量回归；暂不增加云账号、计费、模型 API、真实网站自动填表或多 Agent 编排。
+界面参考 [Tabler](https://github.com/tabler/tabler) 的信息布局（未复制其代码、无额外依赖）。架构与边界见 [ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
-**这些是下一版本目标，尚未实现。** 架构和文件边界见 [ARCHITECTURE.md](docs/ARCHITECTURE.md)。
-
-## 当前进度（2026-10-17）
+## 当前进度（2026-10-18）
 
 | 模块 | 状态 |
 |---|---|
@@ -76,6 +72,7 @@ https://example.jobs.feishu.cn/s/abc123
 | 文档 | 用途 |
 |---|---|
 | [架构与当前迭代边界](docs/ARCHITECTURE.md) | 原生前端、纯函数、存储职责，下一版本允许与禁止的扩展 |
+| [部署说明](docs/DEPLOY.md) | GitHub Pages 在线演示、私有仓库替代方案、扩展分发与发布前检查 |
 | [设计说明](docs/DESIGN.md) | 粘贴导入、类型识别、信息卡、字段分级、三遍质检、Agent 分工、状态去重 |
 | [工作流与边界](docs/WORKFLOW.md) | 投递工作流、文案规则、模型能力范围、隐私与验收要求 |
 
@@ -111,3 +108,7 @@ npm run parse-resume -- "本地简历.docx" "private/resume-parsed.json"
 - [ ] 视觉身份升级（配色、密度、品牌化；模板调研已完成待选型）。
 - [ ] 首个招聘平台适配器；批量填写与读回比对。
 - [ ] 三遍质检流程；额度台账与申请级去重。
+
+## License
+
+MIT License © 2026 simonshi-stu。见 [LICENSE](LICENSE)。

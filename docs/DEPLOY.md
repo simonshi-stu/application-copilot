@@ -2,9 +2,11 @@
 
 本项目的界面是**纯静态文件**（`extension/`），没有后端、没有构建步骤，也不需要环境变量。部署后所有数据仍保存在访问者自己的浏览器里（`localStorage`；作为扩展运行时使用 `chrome.storage.local`），不会上传服务器。
 
-## 方式一：GitHub Pages（需要公开仓库或付费计划）
+## 方式一：GitHub Pages（已启用）
 
-实测：本仓库当前为私有，账户计划不支持私有仓库 Pages（GitHub API 返回 422 “Your current plan does not support GitHub Pages for this repository”）。公开仓库免费可用 Pages。
+当前已部署：<https://simonshi-stu.github.io/application-copilot/>。仓库已公开，Pages 使用 GitHub Actions 发布 `extension/`，入口 `index.html` 自动跳转到 `editor.html`。
+
+若日后改为私有仓库：私有仓库需要付费计划才支持 Pages；否则可改用方式二。
 
 步骤：
 
