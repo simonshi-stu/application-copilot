@@ -48,6 +48,12 @@
             </div>
             <p class="hint">解析结果只是草稿：公司名、行业、链接、内推候选都可以改。内推码冲突保留全部候选，选定值留空，等你在详情里选择。</p>
           </details>
+          <div class="stat-grid" id="company-stats" aria-label="清单统计">
+            <button class="stat-card" data-status="all" type="button"><span class="stat-value" id="stat-all">0</span><span class="stat-label">全部</span></button>
+            <button class="stat-card" data-status="needs_review" type="button"><span class="stat-value" id="stat-review">0</span><span class="stat-label">待核对</span></button>
+            <button class="stat-card" data-status="confirmed" type="button"><span class="stat-value" id="stat-confirmed">0</span><span class="stat-label">已确认</span></button>
+            <button class="stat-card" data-status="issues" type="button"><span class="stat-value" id="stat-issues">0</span><span class="stat-label">有问题</span></button>
+          </div>
           <div class="toolbar">
             <label class="inline">搜索 <input id="company-search" type="search" placeholder="公司名关键词"></label>
             <label class="inline">状态

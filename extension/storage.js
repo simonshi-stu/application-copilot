@@ -125,6 +125,7 @@ export function migrateCompanies(raw) {
         ? Object.fromEntries(Object.entries(item.answers).filter(([key, value]) => typeof key === 'string' && typeof value === 'string'))
         : {},
       stage: Object.hasOwn(STAGES, item.stage) ? item.stage : 'todo',
+      sheetCopiedAt: typeof item.sheetCopiedAt === 'string' ? item.sheetCopiedAt : '',
       rawSource: typeof item.rawSource === 'string' ? item.rawSource : '',
     });
   }

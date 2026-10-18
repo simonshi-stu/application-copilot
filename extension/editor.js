@@ -6,6 +6,7 @@ import { INDUSTRIES, NATURES, classifyCompany, setIndustry } from './company-cla
 import { buildFieldCard } from './field-cards.js';
 import { factsFromResume, makeFact, validateFacts } from './profile-facts.js';
 import { STAGES, STAGE_FLOW, buildReviewSheet } from './review-sheet.js';
+import { computeFlowSteps } from './flow-steps.js';
 import { KEYS, loadAll, saveAll, migrateCompanies } from './storage.js';
 
 const $ = id => document.getElementById(id);
@@ -267,6 +268,14 @@ function reviewLabel(entry) {
   return { text: '草稿', cls: '' };
 }
 
+function refreshDetailState(entry) {
+  const badge = document.querySelector('#company-detail .detail-head .badge');
+  if (!badge) return;
+  const state = reviewLabel(entry);
+  badge.textContent = state.text;
+  badge.className = `badge ${state.cls}`.trim();
+}
+
 function entryHasIssues(entry) {
   return Boolean((entry.warnings && entry.warnings.length) || entry.referral?.conflict || !entry.company);
 }
@@ -283,7 +292,63 @@ function nextAction(entry) {
   const unanswered = unansweredAsks(entry);
   if (unanswered) return `补充公司信息（${unanswered} 项）`;
   if (entry.review !== 'confirmed') return '核对并确认';
-  return STAGE_FLOW[entry.stage || 'todo'] || '生成送审单';
+  const stage = entry.stage || 'todo';
+  if ((stage === 'todo' || stage === 'preparing') && entry.sheetCopiedAt) return '等待本人提交';
+  return STAGE_FLOW[stage] || '生成送审单';
+}
+
+function buildFlow(entry) {
+  const flow = element('div', undefined, 'flow');
+  const steps = computeFlowSteps(entry, { unanswered: unansweredAsks(entry) });
+  const stepper = element('ol', undefined, 'steps');
+  for (const step of steps) {
+    const item = element('li', undefined, `step step-${step.state}`);
+    item.append(element('span', '', 'step-dot'), element('span', step.label, 'step-label'));
+    stepper.append(item);
+  }
+  flow.append(element('p', '准备流程', 'card-title'), stepper);
+  const cta = element('button', `下一步：${nextAction(entry)}`, 'flow-cta');
+  cta.type = 'button';
+  cta.addEventListener('click', () => runNextAction(entry));
+  flow.append(cta);
+  return flow;
+}
+
+function refreshFlow(entry) {
+  const container = document.querySelector('#company-detail .flow');
+  if (container) container.replaceWith(buildFlow(entry));
+}
+
+function focusInDetail(selector) {
+  const target = document.querySelector(`#company-detail ${selector}`);
+  if (!target) return;
+  target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  target.classList.add('flash');
+  setTimeout(() => target.classList.remove('flash'), 1400);
+  if (typeof target.focus === 'function') target.focus({ preventScroll: true });
+}
+
+function runNextAction(entry) {
+  const action = nextAction(entry);
+  if (action.startsWith('补充公司名')) return focusInDetail('[data-field="name"]');
+  if (action.startsWith('补充链接')) return focusInDetail('[data-field="links"]');
+  if (action.startsWith('选择内推码')) return focusInDetail('.ref-box');
+  if (action.startsWith('补充公司信息')) {
+    const inputs = Array.from(document.querySelectorAll('#company-detail .ask-input'));
+    const target = inputs.find(input => !input.value.trim()) || inputs[0];
+    if (!target) return;
+    target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target.classList.add('flash');
+    setTimeout(() => target.classList.remove('flash'), 1400);
+    target.focus({ preventScroll: true });
+    return;
+  }
+  if (action === '核对并确认') return focusInDetail('#detail-confirm');
+  if (action === '生成送审单') {
+    document.querySelector('#company-detail [data-action="sheet"]')?.click();
+    return;
+  }
+  return focusInDetail('#detail-stage');
 }
 
 function touchEntry(entry) {
@@ -301,6 +366,7 @@ function renderCompanyRows() {
     return true;
   });
   $('companies-count').textContent = `${visible.length} / ${companies.length} 条`;
+  renderCompanyStats();
   $('companies-empty').hidden = companies.length > 0;
   for (const entry of visible) {
     const row = element('tr');
@@ -346,11 +412,14 @@ function renderCompanyDetail() {
   head.append(back, title, element('span', state.text, `badge ${state.cls}`.trim()));
   pane.append(head);
 
-  function touch() { touchEntry(entry); }
+  pane.append(buildFlow(entry));
+
+  function touch() { touchEntry(entry); refreshDetailState(entry); }
   function saved() { persist().then(() => { renderCompanyRows(); }).catch(() => notify('本地保存失败，请勿关闭页面。')); }
 
   const basics = element('div', undefined, 'fields');
   const nameInput = element('input'); nameInput.type = 'text'; nameInput.value = entry.company;
+  nameInput.dataset.field = 'name';
   nameInput.addEventListener('input', () => {
     entry.company = nameInput.value;
     touch(); title.textContent = entry.company || '（未命名条目）'; saved();
@@ -382,7 +451,8 @@ function renderCompanyDetail() {
     const option = element('option', stageLabel); option.value = value; stageSelect.append(option);
   }
   stageSelect.value = entry.stage || 'todo';
-  stageSelect.addEventListener('change', () => { entry.stage = stageSelect.value; saved(); renderCompanyRows(); });
+  stageSelect.id = 'detail-stage';
+  stageSelect.addEventListener('change', () => { entry.stage = stageSelect.value; refreshFlow(entry); saved(); renderCompanyRows(); });
   basics.append(labeled('公司名（可改）', nameInput), labeled('行业建议（可改）', industrySelect), labeled('企业性质', natureSelect), labeled('岗位方向（自填）', directionInput), labeled('进度（手动更新）', stageSelect));
   pane.append(basics);
 
@@ -399,6 +469,7 @@ function renderCompanyDetail() {
 
   const linksArea = element('textarea'); linksArea.rows = Math.max(2, entry.links.length);
   linksArea.classList.add('mono');
+  linksArea.dataset.field = 'links';
   linksArea.value = entry.links.map(link => link.url).join('\n');
   linksArea.addEventListener('input', () => {
     const previous = entry.links;
@@ -421,7 +492,7 @@ function renderCompanyDetail() {
     const makeChoice = (value, label) => {
       const input = element('input'); input.type = 'radio'; input.name = `ref-${entry.id}`; input.value = value;
       input.checked = (referral.selected || '') === value;
-      input.addEventListener('change', () => { referral.selected = value; touch(); saved(); });
+      input.addEventListener('change', () => { referral.selected = value; touch(); saved(); refreshFlow(entry); });
       const wrap = element('label');
       wrap.append(input, value && value !== 'none' ? element('span', label, 'mono') : label);
       return wrap;
@@ -471,11 +542,13 @@ function renderCompanyDetail() {
   if (cardData.ask.length) {
     for (const item of cardData.ask) {
       const input = element('input'); input.type = 'text'; input.value = entry.answers?.[item] || '';
+      input.classList.add('ask-input');
       input.addEventListener('input', () => {
         entry.answers = entry.answers || {};
         entry.answers[item] = input.value;
         touch();
         refreshRowNext(entry);
+        refreshFlow(entry);
         persist().catch(() => notify('本地保存失败，请勿关闭页面。'));
       });
       askBox.append(labeled(item, input));
@@ -504,8 +577,11 @@ function renderCompanyDetail() {
 
   const actions = element('div', undefined, 'actions');
   const confirmButton = element('button', '标记为已人工核对'); confirmButton.type = 'button';
+  confirmButton.id = 'detail-confirm';
   confirmButton.addEventListener('click', async () => {
     entry.review = 'confirmed';
+    refreshDetailState(entry);
+    refreshFlow(entry);
     try {
       await persist(); renderCompanyRows();
       notify('已标记为人工核对（仅本地记录；内推绑定与投递结果仍需官网核验）。');
@@ -519,14 +595,20 @@ function renderCompanyDetail() {
     try { await persist(); renderCompanies(); notify('已删除。'); }
     catch { notify('删除未保存成功，请重试。'); }
   });
-  const sheetButton = element('button', '复制送审单', 'secondary'); sheetButton.type = 'button';
-  sheetButton.addEventListener('click', async () => {
+  async function copySheet() {
     try {
       const text = buildReviewSheet(entry, { profile, blocks, facts });
       await navigator.clipboard.writeText(text);
+      entry.sheetCopiedAt = new Date().toISOString();
+      try { await persist(); } catch { notify('送审单已复制，但本地保存失败。'); }
+      refreshFlow(entry);
+      renderCompanyRows();
       notify('送审单已复制；请按清单在官网核对，最终提交由你本人点击。');
     } catch (error) { notify(`复制失败：${error.message}`); }
-  });
+  }
+  const sheetButton = element('button', '复制送审单', 'secondary'); sheetButton.type = 'button';
+  sheetButton.dataset.action = 'sheet';
+  sheetButton.addEventListener('click', copySheet);
   actions.append(confirmButton, sheetButton, remove);
   pane.append(actions);
 }
@@ -544,6 +626,20 @@ function refreshRowNext(entry) {
   const action = nextAction(entry);
   cell.textContent = action;
   cell.className = /补充|选择/.test(action) ? 'next-blocking' : 'next';
+}
+
+function renderCompanyStats() {
+  const counts = { all: companies.length, needs_review: 0, confirmed: 0, issues: 0 };
+  for (const entry of companies) {
+    if (entry.review === 'needs_review') counts.needs_review += 1;
+    if (entry.review === 'confirmed') counts.confirmed += 1;
+    if (entryHasIssues(entry)) counts.issues += 1;
+  }
+  const targets = { all: 'stat-all', needs_review: 'stat-review', confirmed: 'stat-confirmed', issues: 'stat-issues' };
+  for (const [key, id] of Object.entries(targets)) $(id).textContent = counts[key];
+  for (const card of document.querySelectorAll('#company-stats .stat-card')) {
+    card.classList.toggle('active', card.dataset.status === companyFilter.status);
+  }
 }
 
 $('tab-blocks').addEventListener('click', () => showTab('blocks'));
@@ -596,6 +692,7 @@ $('parse-companies').addEventListener('click', async () => {
         industry: null,
         answers: {},
         stage: 'todo',
+        sheetCopiedAt: '',
         rawSource: raw.rawSource,
       };
       if (existing.has(companyKey(entry))) { duplicate++; continue; }
@@ -654,6 +751,13 @@ $('import-companies').addEventListener('change', async event => {
 });
 $('company-search').addEventListener('input', () => { companyFilter.text = $('company-search').value; renderCompanyRows(); });
 $('company-filter').addEventListener('change', () => { companyFilter.status = $('company-filter').value; renderCompanyRows(); });
+$('company-stats').addEventListener('click', event => {
+  const card = event.target.closest('.stat-card');
+  if (!card) return;
+  companyFilter.status = card.dataset.status;
+  $('company-filter').value = companyFilter.status;
+  renderCompanyRows();
+});
 
 $('split').addEventListener('click', async () => {
   const drafts = splitDrafts($('source').value);
