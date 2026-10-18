@@ -139,6 +139,22 @@ export function migrateCompanies(raw) {
           }))
           .slice(-50)
         : [],
+      fillDone: item.fillDone && typeof item.fillDone === 'object' && !Array.isArray(item.fillDone)
+        ? Object.fromEntries(Object.entries(item.fillDone).filter(([key, value]) => typeof key === 'string' && value === true))
+        : {},
+      aiReview: item.aiReview && typeof item.aiReview === 'object' && Array.isArray(item.aiReview.findings)
+        ? {
+          at: typeof item.aiReview.at === 'string' ? item.aiReview.at : '',
+          findings: item.aiReview.findings
+            .filter(finding => finding && typeof finding === 'object' && typeof finding.message === 'string')
+            .map(finding => ({
+              severity: ['error', 'warn', 'info'].includes(finding.severity) ? finding.severity : 'info',
+              area: String(finding.area || ''),
+              message: String(finding.message),
+              suggestion: String(finding.suggestion || ''),
+            })),
+        }
+        : null,
       rawSource: typeof item.rawSource === 'string' ? item.rawSource : '',
     });
   }

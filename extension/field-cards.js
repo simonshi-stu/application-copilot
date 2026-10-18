@@ -43,6 +43,8 @@ const BLOCK_LABELS = {
   other: '其他段落',
 };
 
+export { BLOCK_LABELS };
+
 // 仅统计已确认的段落；解析或草稿一律不计入复用。
 export function approvedSummaryFromBlocks(blocks = []) {
   const counts = new Map();

@@ -8,6 +8,9 @@ import { factsFromResume, makeFact, validateFacts } from './profile-facts.js';
 import { STAGES, STAGE_FLOW, buildReviewSheet } from './review-sheet.js';
 import { computeFlowSteps } from './flow-steps.js';
 import { buildQaReport } from './qa-report.js';
+import { buildFillPlan, fillPlanProgress } from './fill-plan.js';
+import { DEFAULT_AI_CONFIG, loadAiConfig, saveAiConfig, clearAiConfig } from './ai-config.js';
+import { buildReviewPrompt, requestAiReview } from './ai-review.js';
 import { KEYS, loadAll, saveAll, migrateCompanies } from './storage.js';
 
 const $ = id => document.getElementById(id);
@@ -17,6 +20,8 @@ let companies = [];
 let companiesUnknown = [];
 let aliases = {};
 let facts = [];
+let aiConfig = { ...DEFAULT_AI_CONFIG };
+const aiReviewedThisSession = new Set();
 let sourceName = '粘贴文本';
 let selectedCompanyId = null;
 let companyFilter = { text: '', status: 'all' };
@@ -237,7 +242,7 @@ function render() {
   }
 }
 
-const PANELS = { companies: 'panel-companies', profile: 'panel-profile', blocks: 'panel-blocks' };
+const PANELS = { blocks: 'panel-blocks', profile: 'panel-profile', companies: 'panel-companies', settings: 'panel-settings' };
 
 function showTab(name) {
   for (const [key, id] of Object.entries(PANELS)) {
@@ -393,6 +398,101 @@ function renderCompanyRows() {
       if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); }
     });
     tbody.append(row);
+  }
+}
+
+function buildFillPlanSection(entry) {
+  const items = buildFillPlan(entry, { facts, blocks });
+  const progress = fillPlanProgress(entry, items);
+  const box = element('details', undefined, 'fill-plan');
+  box.open = true;
+  const summary = element('summary', `填写计划（已勾选 ${progress.finished}/${progress.total}）`);
+  box.append(summary);
+  if (!items.length) {
+    box.append(element('p', '暂无可用内容：先在「我的资料」确认字段，或在「段落库」确认段落。', 'hint'));
+    return box;
+  }
+  box.append(element('p', '逐项复制到对应表单；待确认项不可直接使用。勾选仅代表你已填过这一项，不会自动提交。', 'hint'));
+  for (const item of items) {
+    const row = element('div', undefined, 'fill-item');
+    const check = element('input'); check.type = 'checkbox';
+    check.disabled = item.status !== 'ready';
+    check.checked = Boolean(entry.fillDone?.[item.key]);
+    check.addEventListener('change', async () => {
+      entry.fillDone = entry.fillDone || {};
+      if (check.checked) entry.fillDone[item.key] = true;
+      else delete entry.fillDone[item.key];
+      const next = fillPlanProgress(entry, items);
+      summary.textContent = `填写计划（已勾选 ${next.finished}/${next.total}）`;
+      persist().catch(() => notify('本地保存失败。'));
+    });
+    const text = element('div', undefined, 'fill-text');
+    text.append(element('div', item.label, 'fill-label'));
+    const preview = item.value.length > 120 ? `${item.value.slice(0, 120)}…` : item.value;
+    text.append(element('div', preview, 'fill-value'));
+    text.append(element('div', `${item.source}${item.status === 'ready' ? '' : ' · 待确认，不可直接使用'}`, 'hint'));
+    const copy = element('button', '复制', 'button-mini secondary'); copy.type = 'button';
+    copy.disabled = item.status !== 'ready';
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(item.value); notify(`已复制：${item.label}`); }
+      catch { notify('复制失败，请手动选择文本。'); }
+    });
+    row.append(check, text, copy);
+    box.append(row);
+  }
+  return box;
+}
+
+function buildAiSection(entry) {
+  const box = element('div', undefined, 'ai-box');
+  const head = element('div', undefined, 'section-heading');
+  head.append(element('p', 'AI 复核（可选）', 'card-title'));
+  const run = element('button', 'AI 复核', 'button-mini secondary'); run.type = 'button';
+  run.disabled = !(aiConfig.apiKey && aiConfig.model);
+  run.addEventListener('click', () => runAiReview(entry));
+  head.append(run);
+  box.append(head);
+  if (!(aiConfig.apiKey && aiConfig.model)) {
+    box.append(element('p', '未配置模型：可在「设置」填写接口/模型/Key，或复制提示词到任意模型复核。', 'hint'));
+    const copyPrompt = element('button', '复制复核提示词', 'button-mini secondary'); copyPrompt.type = 'button';
+    copyPrompt.addEventListener('click', async () => {
+      const { system, user } = buildReviewPrompt(entry, { facts, blocks });
+      try { await navigator.clipboard.writeText(`${system}\n\n---\n\n${user}`); notify('复核提示词已复制，可粘贴到任意模型。'); }
+      catch { notify('复制失败，请手动选择文本。'); }
+    });
+    box.append(copyPrompt);
+    return box;
+  }
+  box.append(element('p', aiConfig.autoReview ? '自动复核已开启：打开公司详情时调用一次（仅提示，不改字段）。' : '点击「AI 复核」调用模型检查缺失或矛盾项（仅提示，不改字段）。', 'hint'));
+  if (entry.aiReview) {
+    box.append(element('p', `上次复核：${entry.aiReview.at ? entry.aiReview.at.slice(0, 16).replace('T', ' ') : '时间未知'}`, 'hint'));
+    if (!entry.aiReview.findings.length) box.append(element('p', '未发现问题。'));
+    else {
+      const ul = element('ul');
+      for (const finding of entry.aiReview.findings) {
+        ul.append(element('li', `[${finding.severity}] ${finding.area ? `${finding.area}：` : ''}${finding.message}${finding.suggestion ? `（建议：${finding.suggestion}）` : ''}`));
+      }
+      box.append(ul);
+    }
+  }
+  return box;
+}
+
+async function runAiReview(entry, { auto = false } = {}) {
+  if (!(aiConfig.apiKey && aiConfig.model)) { notify('请先在「设置」配置模型接口。'); return; }
+  aiReviewedThisSession.add(entry.id);
+  const box = document.querySelector('#company-detail .ai-box');
+  if (box) box.prepend(element('p', 'AI 复核中…', 'hint'));
+  try {
+    const result = await requestAiReview(aiConfig, entry, { facts, blocks });
+    entry.aiReview = { at: new Date().toISOString(), findings: result.findings };
+    await persist();
+    if (selectedCompanyId === entry.id) renderCompanyDetail();
+    else renderCompanyRows();
+    notify(auto ? '自动 AI 复核完成（仅提示，不改动任何字段）。' : 'AI 复核完成（仅提示，不改动任何字段）。');
+  } catch (error) {
+    notify(`AI 复核失败：${error.message}`);
+    if (box) box.prepend(element('p', `复核失败：${error.message}`, 'conflict'));
   }
 }
 
@@ -607,6 +707,9 @@ function renderCompanyDetail() {
   }
   pane.append(card);
 
+  pane.append(buildFillPlanSection(entry));
+  pane.append(buildAiSection(entry));
+
   for (const warning of entry.warnings || []) pane.append(element('p', warning, 'conflict'));
 
   const raw = element('details');
@@ -682,6 +785,11 @@ function renderCompanyDetail() {
   });
   actions.append(confirmButton, sheetButton, downloadButton, qaButton, remove);
   pane.append(actions);
+
+  if (aiConfig.autoReview && aiConfig.apiKey && aiConfig.model && !entry.aiReview && !aiReviewedThisSession.has(entry.id)) {
+    aiReviewedThisSession.add(entry.id);
+    setTimeout(() => { void runAiReview(entry, { auto: true }); }, 0);
+  }
 }
 
 function renderCompanies() {
@@ -716,6 +824,7 @@ function renderCompanyStats() {
 $('tab-blocks').addEventListener('click', () => showTab('blocks'));
 $('tab-companies').addEventListener('click', () => showTab('companies'));
 $('tab-profile').addEventListener('click', () => showTab('profile'));
+$('tab-settings').addEventListener('click', () => showTab('settings'));
 
 $('add-fact').addEventListener('click', async () => {
   facts.push(makeFact('', ''));
@@ -739,6 +848,34 @@ $('export-facts').addEventListener('click', () => {
   const link = element('a'); link.href = url; link.download = 'profile-facts.json'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   notify('已导出资料字段 JSON（可能含未确认字段），请勿公开分享。');
+});
+
+function syncAiSettings() {
+  $('ai-base-url').value = aiConfig.baseUrl || '';
+  $('ai-model').value = aiConfig.model || '';
+  $('ai-key').value = aiConfig.apiKey || '';
+  $('ai-auto-review').checked = Boolean(aiConfig.autoReview);
+  const configured = Boolean(aiConfig.apiKey && aiConfig.model);
+  $('ai-status').textContent = configured ? `已配置${aiConfig.autoReview ? ' · 自动复核开' : ''}` : '未配置';
+  $('ai-status').className = `badge ${configured ? 'ok' : ''}`.trim();
+}
+
+$('ai-save').addEventListener('click', async () => {
+  aiConfig = await saveAiConfig({
+    baseUrl: $('ai-base-url').value,
+    model: $('ai-model').value,
+    apiKey: $('ai-key').value,
+    autoReview: $('ai-auto-review').checked,
+  });
+  syncAiSettings();
+  notify('模型设置已保存在本机（不会进入公司清单/资料导出）。');
+});
+$('ai-clear').addEventListener('click', async () => {
+  if (!confirm('清除本机保存的 API Key 与模型设置？')) return;
+  aiConfig = await clearAiConfig();
+  aiReviewedThisSession.clear();
+  syncAiSettings();
+  notify('已清除本机模型设置。');
 });
 
 $('parse-companies').addEventListener('click', async () => {
@@ -857,8 +994,15 @@ $('parse').addEventListener('click', async () => {
   try {
     if (profile && !confirm('替换当前结构化解析结果？已有段落库不会删除，仍需逐块确认。')) return;
     const next = validateResume(parseResume($('source').value, { sourceName }));
-    profile = next; await persist(); renderProfile();
-    notify(`已识别 ${profile.internships.length} 段实习、${profile.projects.length} 个项目；请检查字段，尚未加入段落库。`);
+    profile = next;
+    let imported = 0;
+    if (!facts.length) {
+      const incoming = factsFromResume(profile);
+      facts.push(...incoming);
+      imported = incoming.length;
+    }
+    await persist(); renderProfile(); renderFacts(); showTab('profile');
+    notify(`已识别 ${profile.internships.length} 段实习、${profile.projects.length} 个项目${imported ? `；已导入 ${imported} 个字段到「我的资料」，请逐项确认` : '；请确认「我的资料」中的字段'}。`);
   } catch (error) { notify(error.message); }
 });
 $('add-profile').addEventListener('click', async () => {
@@ -887,8 +1031,10 @@ $('file').addEventListener('change', async event => {
     if (/\.json$/i.test(file.name)) {
       const next = validateResume(JSON.parse(await file.text()));
       if (profile && !confirm('替换当前结构化解析结果？已有段落库保留。')) return;
-      profile = next; await persist(); renderProfile();
-      notify('已导入结构化简历，全部保持未确认。');
+      profile = next;
+      if (!facts.length) facts.push(...factsFromResume(profile));
+      await persist(); renderProfile(); renderFacts(); showTab('profile');
+      notify('已导入结构化简历，全部保持未确认；字段已带入「我的资料」。');
     } else {
       $('source').value = /\.docx$/i.test(file.name) ? await extractDocx(new Uint8Array(await file.arrayBuffer())) : await file.text();
       sourceName = file.name;
@@ -927,6 +1073,8 @@ try {
   if (migrated.unknown.length) companiesUnknown = [...companiesUnknown, ...migrated.unknown];
   aliases = (stored.aliases && typeof stored.aliases === 'object' && !Array.isArray(stored.aliases)) ? stored.aliases : {};
   facts = validateFacts(stored.facts);
+  aiConfig = await loadAiConfig();
+  syncAiSettings();
   for (const entry of companies) if (!entry.industry) applyClassification(entry);
   selectedCompanyId = companies.length ? companies[0].id : null;
   render(); renderProfile(); renderFacts(); renderCompanies();

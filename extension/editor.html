@@ -14,9 +14,10 @@
         <div><strong>Application Copilot</strong><small>本地求职工作台</small></div>
       </div>
       <nav class="side-nav" aria-label="功能切换">
-        <button id="tab-companies" class="side-nav-item active" type="button" aria-pressed="true">公司与清单</button>
+        <button id="tab-blocks" class="side-nav-item active" type="button" aria-pressed="true">简历与段落</button>
         <button id="tab-profile" class="side-nav-item" type="button" aria-pressed="false">我的资料</button>
-        <button id="tab-blocks" class="side-nav-item" type="button" aria-pressed="false">简历与段落</button>
+        <button id="tab-companies" class="side-nav-item" type="button" aria-pressed="false">公司与清单</button>
+        <button id="tab-settings" class="side-nav-item" type="button" aria-pressed="false">设置</button>
       </nav>
       <div class="sidebar-foot">
         <p id="save-state" class="save-state">尚未修改</p>
@@ -30,11 +31,11 @@
         <p>整理简历与公司清单、给出行业建议与待补信息卡；填写只用你确认过的原文。全部在本机完成。</p>
       </header>
       <aside class="notice">资料仅保存在当前浏览器，不加密、不上传。请不要输入密码、验证码或不必要的证件信息；本版不读取招聘页面、不自动填表、不代提交。</aside>
-      <div id="panel-companies">
+      <div id="panel-companies" hidden>
         <section aria-labelledby="companies-heading">
           <div class="section-heading">
             <h2 id="companies-heading">公司与清单</h2>
-            <span class="badge">草稿自动保存 · 确认需手动标记</span>
+            <span class="badge">第三步 · 草稿自动保存 · 确认需手动标记</span>
           </div>
           <details id="import-panel">
             <summary>粘贴导入 / JSON 导入导出</summary>
@@ -84,7 +85,7 @@
         <section aria-labelledby="facts-heading">
           <div class="section-heading">
             <h2 id="facts-heading">我的资料</h2>
-            <span class="badge">只有「已确认」字段会计入可复用</span>
+            <span class="badge">第二步 · 只有「已确认」字段会计入可复用</span>
           </div>
           <p class="hint">存放填写时反复用到的个人信息。新增或导入后默认「待确认」；确认后才进入公司详情信息卡的「已确认可复用」。证件类等敏感信息如非必要，不要放在这里。</p>
           <div id="fact-list"></div>
@@ -95,9 +96,9 @@
           </div>
         </section>
       </div>
-      <div id="panel-blocks" hidden>
+      <div id="panel-blocks">
         <section aria-labelledby="import-heading">
-          <h2 id="import-heading">导入简历文字</h2>
+          <div class="section-heading"><h2 id="import-heading">导入简历文字</h2><span class="badge">第一步</span></div>
           <label for="source">粘贴简历全文，自动识别个人信息、教育、实习、项目、技能、语言及个人评价；也可按空行简单分块。</label>
           <textarea id="source" aria-label="简历原文草稿" rows="7" placeholder="粘贴实习或项目原文……"></textarea>
           <div class="actions">
@@ -122,6 +123,26 @@
           <p>填写所属经历，选择栏目；可在同一块内加入空行、粘贴多个段落。任何修改都需要重新确认。</p>
           <div id="blocks"></div>
           <p id="empty">还没有段落。先粘贴文字并拆分。</p>
+        </section>
+      </div>
+      <div id="panel-settings" hidden>
+        <section aria-labelledby="settings-heading">
+          <div class="section-heading">
+            <h2 id="settings-heading">设置 · 模型接口（可选）</h2>
+            <span class="badge">Key 只存本机</span>
+          </div>
+          <p class="hint">用于可选的 AI 复核。Key 仅保存在当前浏览器，不会进入公司清单/资料导出，也不写日志。线上页面若遇 CORS 限制，请使用允许浏览器直连的接口，或改用 MCP 服务（见 docs/MCP.md）。</p>
+          <div class="fields">
+            <label>接口地址（OpenAI 兼容）<input id="ai-base-url" type="text" placeholder="https://api.openai.com/v1"></label>
+            <label>模型名<input id="ai-model" type="text" placeholder="如 gpt-4o-mini / deepseek-chat"></label>
+            <label>API Key<input id="ai-key" type="password" placeholder="sk-..."></label>
+            <label class="inline"><input id="ai-auto-review" type="checkbox"> 打开公司详情时自动复核一次（会产生调用费用）</label>
+          </div>
+          <div class="actions">
+            <button id="ai-save" type="button">保存设置</button>
+            <button id="ai-clear" class="danger" type="button">清除 Key</button>
+            <span id="ai-status" class="badge">未配置</span>
+          </div>
         </section>
       </div>
       <p id="status" role="status" aria-live="polite"></p>

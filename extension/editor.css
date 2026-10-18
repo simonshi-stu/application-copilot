@@ -173,6 +173,14 @@ pre {
 .qa-ok { border-left-color: var(--ok); }
 .qa-warn { border-left-color: var(--warn); }
 .qa-error { border-left-color: var(--danger); }
+.fill-plan { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin: 14px 0; background: #fbfdfc; }
+.fill-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 8px 0; border-top: 1px dashed var(--line); }
+.fill-item:first-of-type { border-top: 0; }
+.fill-label { font-weight: 600; font-size: 13.5px; }
+.fill-value { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; color: #334641; margin: 2px 0; }
+.ai-box { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin: 14px 0; background: #f7faf9; }
+.ai-box ul { margin: 6px 0 0; padding-left: 20px; }
+label.inline { display: flex; align-items: center; gap: 6px; }
 .button-mini { padding: 5px 10px; font-size: 13px; }
 .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0 2px; }
 .stat-card {

@@ -1,12 +1,13 @@
 {
   "name": "application-copilot",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "node --test",
     "serve": "node scripts/serve.mjs",
-    "parse-resume": "node scripts/parse-resume.mjs"
+    "parse-resume": "node scripts/parse-resume.mjs",
+    "mcp": "node mcp/server.mjs"
   },
   "engines": { "node": ">=22" }
 }
