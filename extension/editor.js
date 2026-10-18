@@ -39,7 +39,7 @@ function setSaveState(text, kind) {
 
 function persistedLabel() {
   const time = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-  return `草稿已自动保存 · ${time}`;
+  return `已保存 · ${time}`;
 }
 
 function persist() {
@@ -66,6 +66,24 @@ function labeled(text, control) {
   label.append(control);
   return label;
 }
+
+function tip(text) {
+  const node = element('span', '?', 'tip');
+  node.tabIndex = 0;
+  node.setAttribute('role', 'note');
+  node.setAttribute('aria-label', text);
+  node.dataset.tip = text;
+  return node;
+}
+
+document.addEventListener('click', event => {
+  const target = event.target.closest('.tip');
+  document.querySelectorAll('.tip-open').forEach(node => { if (node !== target) node.classList.remove('tip-open'); });
+  if (target) { event.preventDefault(); target.classList.toggle('tip-open'); }
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') document.querySelectorAll('.tip-open').forEach(node => node.classList.remove('tip-open'));
+});
 
 function renderProfile() {
   $('profile-section').hidden = !profile;
@@ -269,7 +287,7 @@ function applyClassification(entry) {
 }
 
 function reviewLabel(entry) {
-  if (entry.review === 'confirmed') return { text: '已人工确认', cls: 'ok' };
+  if (entry.review === 'confirmed') return { text: '已核对', cls: 'ok' };
   if (entry.review === 'needs_review') return { text: '待核对', cls: 'warn' };
   return { text: '草稿', cls: '' };
 }
@@ -312,7 +330,7 @@ function buildFlow(entry) {
     item.append(element('span', '', 'step-dot'), element('span', step.label, 'step-label'));
     stepper.append(item);
   }
-  flow.append(element('p', '准备流程', 'card-title'), stepper);
+  flow.append(element('p', '进度', 'card-title'), stepper);
   const cta = element('button', `下一步：${nextAction(entry)}`, 'flow-cta');
   cta.type = 'button';
   cta.addEventListener('click', () => runNextAction(entry));
@@ -406,13 +424,15 @@ function buildFillPlanSection(entry) {
   const progress = fillPlanProgress(entry, items);
   const box = element('details', undefined, 'fill-plan');
   box.open = true;
-  const summary = element('summary', `填写计划（已勾选 ${progress.finished}/${progress.total}）`);
+  const summary = element('summary', `照着填（已填 ${progress.finished}/${progress.total}）`);
   box.append(summary);
   if (!items.length) {
-    box.append(element('p', '暂无可用内容：先在「我的资料」确认字段，或在「段落库」确认段落。', 'hint'));
+    box.append(element('p', '还没有可用的内容。先去确认字段或段落。', 'hint'));
     return box;
   }
-  box.append(element('p', '逐项复制到对应表单；待确认项不可直接使用。勾选仅代表你已填过这一项，不会自动提交。', 'hint'));
+  const planHint = element('p', '复制 → 粘贴到表单 → 勾选。', 'hint');
+  planHint.append(tip('只显示确认过的内容；待确认项不能复制。勾选只代表你填过，不会自动提交。'));
+  box.append(planHint);
   for (const item of items) {
     const row = element('div', undefined, 'fill-item');
     const check = element('input'); check.type = 'checkbox';
@@ -423,14 +443,14 @@ function buildFillPlanSection(entry) {
       if (check.checked) entry.fillDone[item.key] = true;
       else delete entry.fillDone[item.key];
       const next = fillPlanProgress(entry, items);
-      summary.textContent = `填写计划（已勾选 ${next.finished}/${next.total}）`;
+      summary.textContent = `照着填（已填 ${next.finished}/${next.total}）`;
       persist().catch(() => notify('本地保存失败。'));
     });
     const text = element('div', undefined, 'fill-text');
     text.append(element('div', item.label, 'fill-label'));
     const preview = item.value.length > 120 ? `${item.value.slice(0, 120)}…` : item.value;
     text.append(element('div', preview, 'fill-value'));
-    text.append(element('div', `${item.source}${item.status === 'ready' ? '' : ' · 待确认，不可直接使用'}`, 'hint'));
+    text.append(element('div', `${item.source}${item.status === 'ready' ? '' : ' · 待确认'}`, 'hint'));
     const copy = element('button', '复制', 'button-mini secondary'); copy.type = 'button';
     copy.disabled = item.status !== 'ready';
     copy.addEventListener('click', async () => {
@@ -446,26 +466,28 @@ function buildFillPlanSection(entry) {
 function buildAiSection(entry) {
   const box = element('div', undefined, 'ai-box');
   const head = element('div', undefined, 'section-heading');
-  head.append(element('p', 'AI 复核（可选）', 'card-title'));
-  const run = element('button', 'AI 复核', 'button-mini secondary'); run.type = 'button';
+  const aiTitle = element('p', '让模型检查（可选）', 'card-title');
+  aiTitle.append(tip('会把这家公司和已确认资料发送到你设置的模型接口；可能收费，只给建议，不改字段。'));
+  head.append(aiTitle);
+  const run = element('button', '检查一次', 'button-mini secondary'); run.type = 'button';
   run.disabled = !(aiConfig.apiKey && aiConfig.model);
   run.addEventListener('click', () => runAiReview(entry));
   head.append(run);
   box.append(head);
   if (!(aiConfig.apiKey && aiConfig.model)) {
-    box.append(element('p', '未配置模型：可在「设置」填写接口/模型/Key，或复制提示词到任意模型复核。', 'hint'));
-    const copyPrompt = element('button', '复制复核提示词', 'button-mini secondary'); copyPrompt.type = 'button';
+    box.append(element('p', '还没配置模型。去「设置」填写，或复制提示词到任意模型。', 'hint'));
+    const copyPrompt = element('button', '复制提示词', 'button-mini secondary'); copyPrompt.type = 'button';
     copyPrompt.addEventListener('click', async () => {
       const { system, user } = buildReviewPrompt(entry, { facts, blocks });
-      try { await navigator.clipboard.writeText(`${system}\n\n---\n\n${user}`); notify('复核提示词已复制，可粘贴到任意模型。'); }
+      try { await navigator.clipboard.writeText(`${system}\n\n---\n\n${user}`); notify('提示词已复制，粘贴给任意模型即可。'); }
       catch { notify('复制失败，请手动选择文本。'); }
     });
     box.append(copyPrompt);
     return box;
   }
-  box.append(element('p', aiConfig.autoReview ? '自动复核已开启：打开公司详情时调用一次（仅提示，不改字段）。' : '点击「AI 复核」调用模型检查缺失或矛盾项（仅提示，不改字段）。', 'hint'));
+  box.append(element('p', aiConfig.autoReview ? '自动检查已开：打开公司详情调用一次。只提示，不改字段。' : '点「检查一次」看看有没有漏填或矛盾。只提示，不改字段。', 'hint'));
   if (entry.aiReview) {
-    box.append(element('p', `上次复核：${entry.aiReview.at ? entry.aiReview.at.slice(0, 16).replace('T', ' ') : '时间未知'}`, 'hint'));
+    box.append(element('p', `上次检查：${entry.aiReview.at ? entry.aiReview.at.slice(0, 16).replace('T', ' ') : '时间未知'}`, 'hint'));
     if (!entry.aiReview.findings.length) box.append(element('p', '未发现问题。'));
     else {
       const ul = element('ul');
@@ -489,9 +511,9 @@ async function runAiReview(entry, { auto = false } = {}) {
     await persist();
     if (selectedCompanyId === entry.id) renderCompanyDetail();
     else renderCompanyRows();
-    notify(auto ? '自动 AI 复核完成（仅提示，不改动任何字段）。' : 'AI 复核完成（仅提示，不改动任何字段）。');
+    notify(auto ? '自动检查完成（只提示，不改）。' : '检查完成（只提示，不改）。');
   } catch (error) {
-    notify(`AI 复核失败：${error.message}`);
+    notify(`检查失败：${error.message}`);
     if (box) box.prepend(element('p', `复核失败：${error.message}`, 'conflict'));
   }
 }
@@ -501,7 +523,7 @@ function renderCompanyDetail() {
   pane.replaceChildren();
   const entry = companies.find(item => item.id === selectedCompanyId);
   if (!entry) {
-    pane.append(element('p', '从列表选择一家公司，查看详情与信息卡。', 'hint'));
+    pane.append(element('p', '点左边一家公司看详情。', 'hint'));
     return;
   }
 
@@ -660,9 +682,11 @@ function renderCompanyDetail() {
   const cardData = buildFieldCard(entry.industry?.value || 'other', { profile, blocks, facts });
   const card = element('div', undefined, 'field-card');
   card.append(element('h4', '信息卡'));
-  const group = (titleText, items, fallback, className) => {
+  const group = (titleText, items, fallback, className, tipText) => {
     const box = element('div', undefined, className);
-    box.append(element('p', titleText, 'card-title'));
+    const title = element('p', titleText, 'card-title');
+    if (tipText) title.append(tip(tipText));
+    box.append(title);
     if (items.length) {
       const ul = element('ul');
       for (const item of items) ul.append(element('li', item));
@@ -672,11 +696,13 @@ function renderCompanyDetail() {
     }
     return box;
   };
-  card.append(group('已确认可复用', cardData.reuse, '暂无已确认内容：只有「段落库」里确认过的段落才会出现在这里。', 'fc-group fc-reuse'));
-  card.append(group('已识别待确认', cardData.pending, '尚未导入结构化简历；解析结果不会自动视为可复用。', 'fc-group fc-pending'));
+  card.append(group('确认过的资料', cardData.reuse, '还没有确认过的内容。', 'fc-group fc-reuse', '只有资料库里确认过的字段、段落库里确认过的段落，才会出现在这里。'));
+  card.append(group('已解析，待确认', cardData.pending, '还没导入简历。', 'fc-group fc-pending', '解析结果不算数。确认后才会进入上面的“确认过的资料”。'));
   const answeredCount = cardData.ask.filter(item => String(entry.answers?.[item] || '').trim()).length;
   const askBox = element('div', undefined, 'fc-group fc-ask');
-  askBox.append(element('p', `待本人补充（逐公司确认 ${answeredCount}/${cardData.ask.length}）`, 'card-title'));
+  const askTitle = element('p', `这家公司要补的（${answeredCount}/${cardData.ask.length}）`, 'card-title');
+  askTitle.append(tip('只用于这家公司与本批次，不会带到其他公司。'));
+  askBox.append(askTitle);
   if (cardData.ask.length) {
     for (const item of cardData.ask) {
       const input = element('input'); input.type = 'text'; input.value = entry.answers?.[item] || '';
@@ -696,10 +722,10 @@ function renderCompanyDetail() {
     askBox.append(element('p', '该行业无固定补充项。', 'hint'));
   }
   card.append(askBox);
-  card.append(group('需官网核实', cardData.verify, '无', 'fc-group fc-verify'));
+  card.append(group('去官网确认', cardData.verify, '无', 'fc-group fc-verify', '毕业时间窗口、剩余投递次数、内推是否绑定等，需要你到官网核对。'));
   if (cardData.possible.length) {
     const possible = element('details');
-    possible.append(element('summary', `部分单位可能要求（${cardData.possible.length} 项，不会提前收集）`));
+    possible.append(element('summary', `可能还会要（${cardData.possible.length} 项，不提前收集）`));
     const ul = element('ul');
     for (const item of cardData.possible) ul.append(element('li', item));
     possible.append(ul, element('p', '这些字段以实际申请表为准；本工具不会主动提前收集敏感信息。', 'hint'));
@@ -717,7 +743,7 @@ function renderCompanyDetail() {
   pane.append(raw);
 
   const actions = element('div', undefined, 'actions');
-  const confirmButton = element('button', '标记为已人工核对'); confirmButton.type = 'button';
+  const confirmButton = element('button', '我已核对'); confirmButton.type = 'button';
   confirmButton.id = 'detail-confirm';
   confirmButton.addEventListener('click', async () => {
     entry.review = 'confirmed';
@@ -725,7 +751,7 @@ function renderCompanyDetail() {
     refreshFlow(entry);
     try {
       await persist(); renderCompanyRows();
-      notify('已标记为人工核对（仅本地记录；内推绑定与投递结果仍需官网核验）。');
+      notify('已记录“我已核对”。内推绑定和投递结果仍要你到官网确认。');
     } catch { notify('保存失败，请重试。'); }
   });
   const remove = element('button', '删除此条', 'danger'); remove.type = 'button';
@@ -744,14 +770,14 @@ function renderCompanyDetail() {
       try { await persist(); } catch { notify('送审单已复制，但本地保存失败。'); }
       refreshFlow(entry);
       renderCompanyRows();
-      notify('送审单已复制；请按清单在官网核对，最终提交由你本人点击。');
+      notify('清单已复制。照着填，最后你自己提交。');
     } catch (error) { notify(`复制失败：${error.message}`); }
   }
-  const sheetButton = element('button', '复制送审单', 'secondary'); sheetButton.type = 'button';
+  const sheetButton = element('button', '复制清单', 'secondary'); sheetButton.type = 'button';
   sheetButton.dataset.action = 'sheet';
   sheetButton.addEventListener('click', copySheet);
 
-  const downloadButton = element('button', '下载送审单', 'secondary'); downloadButton.type = 'button';
+  const downloadButton = element('button', '下载清单', 'secondary'); downloadButton.type = 'button';
   downloadButton.addEventListener('click', () => {
     const text = buildReviewSheet(entry, { profile, blocks, facts });
     const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' }));
@@ -764,11 +790,11 @@ function renderCompanyDetail() {
     refreshFlow(entry);
     renderCompanyRows();
     persist().catch(() => notify('送审单已下载，但本地保存失败。'));
-    notify('已下载送审单 Markdown；提交仍由本人操作。');
+    notify('清单已下载。提交还是你自己来。');
   });
 
   let qaBox = null;
-  const qaButton = element('button', '本地自检', 'secondary'); qaButton.type = 'button';
+  const qaButton = element('button', '检查一遍', 'secondary'); qaButton.type = 'button';
   qaButton.addEventListener('click', () => {
     const report = buildQaReport(entry, { facts, unanswered: unansweredAsks(entry) });
     if (qaBox) qaBox.remove();
@@ -838,7 +864,7 @@ $('import-facts').addEventListener('click', async () => {
     if (!incoming.length) return notify('没有可新增的字段（可能已导入过）。');
     facts.push(...incoming);
     await persist(); renderFacts();
-    notify(`已导入 ${incoming.length} 个字段，全部为「待确认」；请逐项核对后确认。`);
+    notify('导入完成，默认“待确认”，请逐项确认。');
   } catch (error) { notify(error.message); }
 });
 $('export-facts').addEventListener('click', () => {
@@ -856,7 +882,7 @@ function syncAiSettings() {
   $('ai-key').value = aiConfig.apiKey || '';
   $('ai-auto-review').checked = Boolean(aiConfig.autoReview);
   const configured = Boolean(aiConfig.apiKey && aiConfig.model);
-  $('ai-status').textContent = configured ? `已配置${aiConfig.autoReview ? ' · 自动复核开' : ''}` : '未配置';
+  $('ai-status').textContent = configured ? `已配置${aiConfig.autoReview ? ' · 自动检查开' : ''}` : '未配置';
   $('ai-status').className = `badge ${configured ? 'ok' : ''}`.trim();
 }
 
@@ -868,14 +894,14 @@ $('ai-save').addEventListener('click', async () => {
     autoReview: $('ai-auto-review').checked,
   });
   syncAiSettings();
-  notify('模型设置已保存在本机（不会进入公司清单/资料导出）。');
+  notify('设置已保存（只存本机）。');
 });
 $('ai-clear').addEventListener('click', async () => {
   if (!confirm('清除本机保存的 API Key 与模型设置？')) return;
   aiConfig = await clearAiConfig();
   aiReviewedThisSession.clear();
   syncAiSettings();
-  notify('已清除本机模型设置。');
+  notify('已清除本机设置。');
 });
 
 $('parse-companies').addEventListener('click', async () => {
@@ -924,7 +950,7 @@ $('parse-companies').addEventListener('click', async () => {
     }
     if (firstAddedId) selectedCompanyId = firstAddedId;
     await persist(); renderCompanies();
-    notify(`解析出 ${entries.length} 家公司：新增 ${added} 条${duplicate ? `，跳过重复 ${duplicate} 条` : ''}${skipped ? `，忽略说明文字 ${skipped} 段` : ''}。请逐条核对。`);
+    notify(`新加 ${added} 家公司${duplicate ? `，跳过 ${duplicate} 条重复` : ''}。请逐个核对。`);
   } catch (error) { notify(error.message); }
 });
 $('clear-company-source').addEventListener('click', () => { $('company-source').value = ''; });
@@ -1002,7 +1028,7 @@ $('parse').addEventListener('click', async () => {
       imported = incoming.length;
     }
     await persist(); renderProfile(); renderFacts(); showTab('profile');
-    notify(`已识别 ${profile.internships.length} 段实习、${profile.projects.length} 个项目${imported ? `；已导入 ${imported} 个字段到「我的资料」，请逐项确认` : '；请确认「我的资料」中的字段'}。`);
+    notify(`解析完成：${profile.internships.length} 段实习、${profile.projects.length} 个项目。字段已放进「我的资料」，请确认。`);
   } catch (error) { notify(error.message); }
 });
 $('add-profile').addEventListener('click', async () => {
@@ -1034,7 +1060,7 @@ $('file').addEventListener('change', async event => {
       profile = next;
       if (!facts.length) facts.push(...factsFromResume(profile));
       await persist(); renderProfile(); renderFacts(); showTab('profile');
-      notify('已导入结构化简历，全部保持未确认；字段已带入「我的资料」。');
+      notify('简历已导入，字段已放进「我的资料」。');
     } else {
       $('source').value = /\.docx$/i.test(file.name) ? await extractDocx(new Uint8Array(await file.arrayBuffer())) : await file.text();
       sourceName = file.name;

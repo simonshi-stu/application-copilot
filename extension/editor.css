@@ -181,6 +181,33 @@ pre {
 .ai-box { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin: 14px 0; background: #f7faf9; }
 .ai-box ul { margin: 6px 0 0; padding-left: 20px; }
 label.inline { display: flex; align-items: center; gap: 6px; }
+.tip {
+  position: relative; display: inline-grid; place-items: center;
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 1px solid var(--line-strong); background: #fff; color: var(--muted);
+  font-size: 11px; font-weight: 700; line-height: 1; cursor: help; margin-left: 4px;
+  vertical-align: 1px;
+}
+.tip::before, .tip::after {
+  position: absolute; z-index: 60; opacity: 0; visibility: hidden;
+  transition: opacity .12s ease, transform .12s ease; pointer-events: none;
+}
+.tip::after {
+  content: attr(data-tip); left: 50%; bottom: calc(100% + 9px);
+  transform: translateX(-50%) translateY(2px);
+  width: max-content; max-width: min(240px, calc(100vw - 40px));
+  padding: 8px 10px; border-radius: 8px; background: #17332c; color: #fff;
+  font-size: 12px; line-height: 1.55; font-weight: 400; text-align: left;
+  white-space: normal; box-shadow: 0 8px 24px -12px rgba(0, 0, 0, .4);
+}
+.tip::before {
+  content: ''; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: #17332c;
+}
+.tip:hover::after, .tip:focus-visible::after, .tip.tip-open::after {
+  opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0);
+}
+.tip:hover::before, .tip:focus-visible::before, .tip.tip-open::before { opacity: 1; visibility: visible; }
 .button-mini { padding: 5px 10px; font-size: 13px; }
 .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0 2px; }
 .stat-card {
@@ -239,4 +266,10 @@ label.inline { display: flex; align-items: center; gap: 6px; }
   section { padding: 18px 16px; }
   .fields { grid-template-columns: 1fr; }
   .toolbar input[type="search"] { width: 100%; }
+  .tip::after {
+    position: fixed; left: 16px; right: 16px; bottom: 16px; top: auto;
+    width: auto; max-width: none; transform: none;
+  }
+  .tip::before { display: none; }
+  .tip:hover::after, .tip:focus-visible::after, .tip.tip-open::after { transform: none; }
 }

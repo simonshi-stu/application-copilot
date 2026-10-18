@@ -20,34 +20,72 @@
         <button id="tab-settings" class="side-nav-item" type="button" aria-pressed="false">设置</button>
       </nav>
       <div class="sidebar-foot">
-        <p id="save-state" class="save-state">尚未修改</p>
-        <p class="sidebar-note">数据仅存本机，不联网</p>
+        <p id="save-state" class="save-state">未改动</p>
+        <p class="sidebar-note">只存本机，不联网</p>
       </div>
     </aside>
     <main>
       <header>
-        <p class="eyebrow">LOCAL-FIRST · 本机运行</p>
-        <h1>你确认内容，工具只负责整理与复制。</h1>
-        <p>整理简历与公司清单、给出行业建议与待补信息卡；填写只用你确认过的原文。全部在本机完成。</p>
+        <p class="eyebrow">LOCAL-FIRST · 只存本机</p>
+        <h1>先确认资料，再照着清单填。</h1>
+        <p>简历 → 字段 → 公司 → 填写清单。全部在你浏览器里完成。</p>
       </header>
-      <aside class="notice">资料仅保存在当前浏览器，不加密、不上传。请不要输入密码、验证码或不必要的证件信息；本版不读取招聘页面、不自动填表、不代提交。</aside>
+      <aside class="notice">资料不上传。登录、验证码、最终提交都由你完成。<span class="tip" tabindex="0" role="note" data-tip="不读取招聘网站、不自动填表、不代提交。解析和保存都在浏览器本地完成。">?</span></aside>
+      <div id="panel-blocks">
+        <section aria-labelledby="import-heading">
+          <div class="section-heading"><h2 id="import-heading">第一步 · 导入简历</h2><span class="badge">自动拆分</span></div>
+          <label for="source">粘贴简历全文，或直接导入 DOCX。</label>
+          <textarea id="source" aria-label="简历原文草稿" rows="7" placeholder="粘贴简历文字……"></textarea>
+          <div class="actions">
+            <button id="parse" type="button">解析简历</button>
+            <button id="split" class="secondary" type="button">按空行拆分</button>
+            <label class="file-label">导入文件 <input id="file" aria-label="导入本地简历文件" type="file" accept=".txt,.md,.docx,.json"></label>
+          </div>
+          <p class="hint">支持 DOCX / TXT / MD；PDF 请先复制文字。<span class="tip" tabindex="0" role="note" data-tip="只在本地解析，不上传。自动拆行可能有误，原始文字会保留供你核对。">?</span></p>
+        </section>
+        <section id="profile-section" hidden aria-labelledby="profile-heading">
+          <div class="section-heading"><h2 id="profile-heading">解析结果</h2><span class="badge">全部待确认</span></div>
+          <p class="hint">检查公司、地点、岗位和正文。<span class="tip" tabindex="0" role="note" data-tip="简历没写项目岗位就不填，不默认“独立开发”。">?</span></p>
+          <div id="profile"></div>
+          <label><input id="include-candidates" type="checkbox">同时生成项目简述 / 职责候选（需你修改确认）</label>
+          <div class="actions">
+            <button id="add-profile" type="button">加入段落库</button>
+            <button id="export-profile" class="secondary" type="button">导出 JSON</button>
+          </div>
+        </section>
+        <section aria-labelledby="blocks-heading">
+          <div class="section-heading"><h2 id="blocks-heading">确认段落</h2><button id="clear" class="danger" type="button">清空全部资料</button></div>
+          <p class="hint">改好、勾选确认后，才能复制原文。<span class="tip" tabindex="0" role="note" data-tip="复制时不会改写、压缩或截断。超出字数上限会让你自己改。">?</span></p>
+          <div id="blocks"></div>
+          <p id="empty">还没有段落。先在上方解析简历。</p>
+        </section>
+      </div>
+      <div id="panel-profile" hidden>
+        <section aria-labelledby="facts-heading">
+          <div class="section-heading"><h2 id="facts-heading">第二步 · 我的资料</h2><span class="badge">确认后才算数</span></div>
+          <p class="hint">填表常用信息。点「确认」后才会进入填写清单。<span class="tip" tabindex="0" role="note" data-tip="从简历导入的字段默认“待确认”。只有“已确认”的字段才会计入可复用。">?</span></p>
+          <div id="fact-list"></div>
+          <div class="actions">
+            <button id="add-fact" type="button">新增一行</button>
+            <button id="import-facts" class="secondary" type="button">导入解析字段</button>
+            <button id="export-facts" class="secondary" type="button">导出 JSON</button>
+          </div>
+        </section>
+      </div>
       <div id="panel-companies" hidden>
         <section aria-labelledby="companies-heading">
-          <div class="section-heading">
-            <h2 id="companies-heading">公司与清单</h2>
-            <span class="badge">第三步 · 草稿自动保存 · 确认需手动标记</span>
-          </div>
+          <div class="section-heading"><h2 id="companies-heading">第三步 · 公司与清单</h2><span class="badge">草稿自动保存</span></div>
           <details id="import-panel">
-            <summary>粘贴导入 / JSON 导入导出</summary>
-            <label for="company-source">支持群消息、文档表格、编号清单、纯公司名列表、链接列表；没有内推码也能用。解析全部在本机完成，不联网。</label>
-            <textarea id="company-source" aria-label="公司与内推信息原文" rows="7" placeholder="示例（虚构）：1️⃣【示例公司 秋招】https://app.mokahr.com/m/campus_apply/example/12345?recommendCode=TESTCODE99#/jobs 内推码:TESTCODE99"></textarea>
+            <summary>粘贴公司信息</summary>
+            <label for="company-source">群里复制的一大段、链接列表，或只有公司名，都可以。</label>
+            <textarea id="company-source" aria-label="公司与内推信息原文" rows="6" placeholder="粘贴公司 / 内推信息……"></textarea>
             <div class="actions">
-              <button id="parse-companies" type="button">解析并生成草稿</button>
-              <button id="clear-company-source" class="secondary" type="button">清空输入</button>
+              <button id="parse-companies" type="button">解析公司</button>
+              <button id="clear-company-source" class="secondary" type="button">清空</button>
               <label class="file-label">导入 JSON <input id="import-companies" aria-label="导入公司与清单 JSON" type="file" accept=".json,application/json"></label>
               <button id="export-companies" class="secondary" type="button">导出 JSON</button>
             </div>
-            <p class="hint">解析结果只是草稿：公司名、行业、链接、内推候选都可以改。内推码冲突保留全部候选，选定值留空，等你在详情里选择。</p>
+            <p class="hint">识别结果只是草稿，可以改。<span class="tip" tabindex="0" role="note" data-tip="多个内推码会全部保留，不替你选；链接里带码也不代表官网已绑定。">?</span></p>
           </details>
           <div class="stat-grid" id="company-stats" aria-label="清单统计">
             <button class="stat-card" data-status="all" type="button"><span class="stat-value" id="stat-all">0</span><span class="stat-label">全部</span></button>
@@ -56,7 +94,7 @@
             <button class="stat-card" data-status="issues" type="button"><span class="stat-value" id="stat-issues">0</span><span class="stat-label">有问题</span></button>
           </div>
           <div class="toolbar">
-            <label class="inline">搜索 <input id="company-search" type="search" placeholder="公司名关键词"></label>
+            <label class="inline">搜索 <input id="company-search" type="search" placeholder="公司名"></label>
             <label class="inline">状态
               <select id="company-filter">
                 <option value="all">全部</option>
@@ -75,71 +113,24 @@
                 <thead><tr><th>公司</th><th>行业建议</th><th>状态</th><th>下一步</th></tr></thead>
                 <tbody id="company-rows"></tbody>
               </table>
-              <p id="companies-empty" class="hint" style="padding: 0 12px 12px;">还没有条目。展开上方「粘贴导入」开始；解析结果只作草稿。</p>
+              <p id="companies-empty" class="hint" style="padding: 0 12px 12px;">还没有公司。点上面「粘贴公司信息」开始。</p>
             </div>
             <aside id="company-detail" class="detail-pane" aria-label="当前公司详情"></aside>
           </div>
         </section>
       </div>
-      <div id="panel-profile" hidden>
-        <section aria-labelledby="facts-heading">
-          <div class="section-heading">
-            <h2 id="facts-heading">我的资料</h2>
-            <span class="badge">第二步 · 只有「已确认」字段会计入可复用</span>
-          </div>
-          <p class="hint">存放填写时反复用到的个人信息。新增或导入后默认「待确认」；确认后才进入公司详情信息卡的「已确认可复用」。证件类等敏感信息如非必要，不要放在这里。</p>
-          <div id="fact-list"></div>
-          <div class="actions">
-            <button id="add-fact" type="button">新增字段</button>
-            <button id="import-facts" class="secondary" type="button">从已解析简历导入（全部为待确认）</button>
-            <button id="export-facts" class="secondary" type="button">导出资料 JSON</button>
-          </div>
-        </section>
-      </div>
-      <div id="panel-blocks">
-        <section aria-labelledby="import-heading">
-          <div class="section-heading"><h2 id="import-heading">导入简历文字</h2><span class="badge">第一步</span></div>
-          <label for="source">粘贴简历全文，自动识别个人信息、教育、实习、项目、技能、语言及个人评价；也可按空行简单分块。</label>
-          <textarea id="source" aria-label="简历原文草稿" rows="7" placeholder="粘贴实习或项目原文……"></textarea>
-          <div class="actions">
-            <button id="parse" type="button">自动解析简历区域</button>
-            <button id="split" type="button">按空行拆分并追加</button>
-            <label class="file-label">本地导入 <input id="file" aria-label="导入本地简历文件" type="file" accept=".txt,.md,.docx,.json"></label>
-          </div>
-          <p class="hint">支持本地 DOCX、TXT、MD 与本工具导出的 JSON；PDF 请粘贴已提取文本。解析不会上传材料；折行重建可能有误，原文保留供核对。</p>
-        </section>
-        <section id="profile-section" hidden aria-labelledby="profile-heading">
-          <h2 id="profile-heading">结构化简历 · 全部待确认</h2>
-          <p>公司／地点／岗位与正文分别存储。缺失字段保持空白；项目岗位不默认“独立开发”。此处可调整名称等元数据，正文在段落库逐块审核。解析结果不会自动视为可复用。</p>
-          <div id="profile"></div>
-          <label><input id="include-candidates" type="checkbox">同时加入项目简述／职责候选（可能重复，须本人修改确认）</label>
-          <div class="actions">
-            <button id="add-profile" type="button">将结构化正文加入段落库</button>
-            <button id="export-profile" class="secondary" type="button">导出本地解析 JSON</button>
-          </div>
-        </section>
-        <section aria-labelledby="blocks-heading">
-          <div class="section-heading"><h2 id="blocks-heading">整理并确认段落</h2><button id="clear" class="danger" type="button">清空本地资料</button></div>
-          <p>填写所属经历，选择栏目；可在同一块内加入空行、粘贴多个段落。任何修改都需要重新确认。</p>
-          <div id="blocks"></div>
-          <p id="empty">还没有段落。先粘贴文字并拆分。</p>
-        </section>
-      </div>
       <div id="panel-settings" hidden>
         <section aria-labelledby="settings-heading">
-          <div class="section-heading">
-            <h2 id="settings-heading">设置 · 模型接口（可选）</h2>
-            <span class="badge">Key 只存本机</span>
-          </div>
-          <p class="hint">用于可选的 AI 复核。Key 仅保存在当前浏览器，不会进入公司清单/资料导出，也不写日志。线上页面若遇 CORS 限制，请使用允许浏览器直连的接口，或改用 MCP 服务（见 docs/MCP.md）。</p>
+          <div class="section-heading"><h2 id="settings-heading">设置</h2><span class="badge">可选</span></div>
+          <p class="hint">用自己的模型接口检查填写。Key 只存本机。<span class="tip" tabindex="0" role="note" data-tip="Key 不会进入公司/资料导出，也不写日志。线上页面可能受 CORS 限制，本地运行更稳。">?</span></p>
           <div class="fields">
-            <label>接口地址（OpenAI 兼容）<input id="ai-base-url" type="text" placeholder="https://api.openai.com/v1"></label>
+            <label>接口地址<input id="ai-base-url" type="text" placeholder="https://api.openai.com/v1"></label>
             <label>模型名<input id="ai-model" type="text" placeholder="如 gpt-4o-mini / deepseek-chat"></label>
             <label>API Key<input id="ai-key" type="password" placeholder="sk-..."></label>
-            <label class="inline"><input id="ai-auto-review" type="checkbox"> 打开公司详情时自动复核一次（会产生调用费用）</label>
+            <label class="inline"><input id="ai-auto-review" type="checkbox"> 打开公司详情时自动检查一次（会产生费用）</label>
           </div>
           <div class="actions">
-            <button id="ai-save" type="button">保存设置</button>
+            <button id="ai-save" type="button">保存</button>
             <button id="ai-clear" class="danger" type="button">清除 Key</button>
             <span id="ai-status" class="badge">未配置</span>
           </div>
