@@ -45,7 +45,22 @@ export function buildReviewSheet(entry, { profile = null, blocks = [], facts = [
   if (referral.conflict) lines.push('- ⚠ 存在多个内推候选：按你当前的选择生成；内容仍需官网核实。');
   lines.push(`- 人工核对状态：${entry.review === 'confirmed' ? '已人工核对' : entry.review === 'needs_review' ? '待核对' : '草稿'}`);
   lines.push(`- 进度：${STAGES[entry.stage] || STAGES.todo}`);
+  if (entry.applicationRef) lines.push(`- 申请号 / 岗位ID：${entry.applicationRef}`);
+  if (entry.appliedAt) lines.push(`- 提交日期（本人填写）：${entry.appliedAt}`);
   lines.push('');
+  if (entry.notes) {
+    lines.push('## 备注（仅本机记录）');
+    lines.push(entry.notes);
+    lines.push('');
+  }
+  if (Array.isArray(entry.history) && entry.history.length) {
+    lines.push('## 进度记录');
+    for (const item of entry.history.slice(-10)) {
+      const at = item.at ? item.at.slice(0, 16).replace('T', ' ') : '时间未知';
+      lines.push(`- ${at}：${STAGES[item.from] || item.from || '—'} → ${STAGES[item.to] || item.to}`);
+    }
+    lines.push('');
+  }
 
   const card = buildFieldCard(entry.industry?.value || 'other', { profile, blocks, facts });
   const answers = entry.answers || {};

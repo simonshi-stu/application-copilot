@@ -7,6 +7,7 @@ import { buildFieldCard } from './field-cards.js';
 import { factsFromResume, makeFact, validateFacts } from './profile-facts.js';
 import { STAGES, STAGE_FLOW, buildReviewSheet } from './review-sheet.js';
 import { computeFlowSteps } from './flow-steps.js';
+import { buildQaReport } from './qa-report.js';
 import { KEYS, loadAll, saveAll, migrateCompanies } from './storage.js';
 
 const $ = id => document.getElementById(id);
@@ -148,7 +149,7 @@ function renderFacts() {
       facts = facts.filter(item => item.id !== fact.id);
       try { await persist(); renderFacts(); } catch { notify('删除未保存成功。'); }
     });
-    row.append(label, value, status, remove);
+    row.append(label, value, element('span', fact.source === 'resume' ? '简历导入' : '手动', 'badge source'), status, remove);
     list.append(row);
   }
 }
@@ -452,9 +453,29 @@ function renderCompanyDetail() {
   }
   stageSelect.value = entry.stage || 'todo';
   stageSelect.id = 'detail-stage';
-  stageSelect.addEventListener('change', () => { entry.stage = stageSelect.value; refreshFlow(entry); saved(); renderCompanyRows(); });
+  stageSelect.addEventListener('change', () => {
+    const from = entry.stage || 'todo';
+    const to = stageSelect.value;
+    entry.stage = to;
+    if (from !== to) {
+      entry.history = Array.isArray(entry.history) ? entry.history : [];
+      entry.history.push({ at: new Date().toISOString(), from, to });
+      entry.history = entry.history.slice(-50);
+    }
+    saved();
+    renderCompanyDetail();
+  });
   basics.append(labeled('公司名（可改）', nameInput), labeled('行业建议（可改）', industrySelect), labeled('企业性质', natureSelect), labeled('岗位方向（自填）', directionInput), labeled('进度（手动更新）', stageSelect));
   pane.append(basics);
+
+  const appFields = element('div', undefined, 'fields');
+  const refInput = element('input'); refInput.type = 'text'; refInput.value = entry.applicationRef || '';
+  refInput.placeholder = '如官方岗位ID / 申请号（仅本机记录）';
+  refInput.addEventListener('input', () => { entry.applicationRef = refInput.value; touch(); saved(); });
+  const appliedInput = element('input'); appliedInput.type = 'date'; appliedInput.value = entry.appliedAt || '';
+  appliedInput.addEventListener('input', () => { entry.appliedAt = appliedInput.value; touch(); saved(); });
+  appFields.append(labeled('申请号 / 岗位ID（本机记录）', refInput), labeled('提交日期（本人填写）', appliedInput));
+  pane.append(appFields);
 
   if (entry.industry) {
     const info = [`判断依据：${(entry.industry.reasons || []).join('；') || '无'}`];
@@ -513,11 +534,28 @@ function renderCompanyDetail() {
   const channelInput = element('input'); channelInput.type = 'text'; channelInput.value = entry.channelHint || '';
   channelInput.addEventListener('input', () => { entry.channelHint = channelInput.value; touch(); saved(); });
   pane.append(labeled('渠道提示', channelInput));
+  const notesArea = element('textarea'); notesArea.rows = 2;
+  notesArea.placeholder = '仅本机记录：沟通情况、材料版本、待跟进事项…';
+  notesArea.value = entry.notes || '';
+  notesArea.addEventListener('input', () => { entry.notes = notesArea.value; touch(); saved(); });
+  pane.append(labeled('备注（仅本机）', notesArea));
   const metaLine = [];
   if (entry.platform && entry.platform !== 'none') metaLine.push(`平台：${entry.platform}`);
   if (entry.batch) metaLine.push(`批次：${entry.batch}`);
   if (entry.deadline) metaLine.push(entry.deadline);
   if (metaLine.length) pane.append(element('p', metaLine.join(' ｜ '), 'hint'));
+
+  if (Array.isArray(entry.history) && entry.history.length) {
+    const historyBox = element('details');
+    historyBox.append(element('summary', `进度记录（${entry.history.length}）`));
+    const ul = element('ul');
+    for (const step of entry.history.slice(-20).reverse()) {
+      const at = step.at ? step.at.slice(0, 16).replace('T', ' ') : '时间未知';
+      ul.append(element('li', `${at} · ${STAGES[step.from] || step.from || '—'} → ${STAGES[step.to] || step.to}`));
+    }
+    historyBox.append(ul);
+    pane.append(historyBox);
+  }
 
   const cardData = buildFieldCard(entry.industry?.value || 'other', { profile, blocks, facts });
   const card = element('div', undefined, 'field-card');
@@ -609,7 +647,40 @@ function renderCompanyDetail() {
   const sheetButton = element('button', '复制送审单', 'secondary'); sheetButton.type = 'button';
   sheetButton.dataset.action = 'sheet';
   sheetButton.addEventListener('click', copySheet);
-  actions.append(confirmButton, sheetButton, remove);
+
+  const downloadButton = element('button', '下载送审单', 'secondary'); downloadButton.type = 'button';
+  downloadButton.addEventListener('click', () => {
+    const text = buildReviewSheet(entry, { profile, blocks, facts });
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' }));
+    const link = element('a');
+    link.href = url;
+    link.download = `送审单-${(entry.company || '未命名').replace(/[\\/:*?"<>|]/g, '-')}.md`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    entry.sheetCopiedAt = entry.sheetCopiedAt || new Date().toISOString();
+    refreshFlow(entry);
+    renderCompanyRows();
+    persist().catch(() => notify('送审单已下载，但本地保存失败。'));
+    notify('已下载送审单 Markdown；提交仍由本人操作。');
+  });
+
+  let qaBox = null;
+  const qaButton = element('button', '本地自检', 'secondary'); qaButton.type = 'button';
+  qaButton.addEventListener('click', () => {
+    const report = buildQaReport(entry, { facts, unanswered: unansweredAsks(entry) });
+    if (qaBox) qaBox.remove();
+    qaBox = element('div', undefined, `qa-box qa-${report.level}`);
+    qaBox.append(element('p', report.level === 'ok'
+      ? '自检通过：未发现明显问题。'
+      : '自检结果：以下条目需要你确认（不会自动修改或提交）。', 'card-title'));
+    if (report.items.length) {
+      const ul = element('ul');
+      for (const item of report.items) ul.append(element('li', `[${item.severity}] ${item.text}`));
+      qaBox.append(ul);
+    }
+    pane.insertBefore(qaBox, actions);
+  });
+  actions.append(confirmButton, sheetButton, downloadButton, qaButton, remove);
   pane.append(actions);
 }
 
@@ -661,6 +732,14 @@ $('import-facts').addEventListener('click', async () => {
     notify(`已导入 ${incoming.length} 个字段，全部为「待确认」；请逐项核对后确认。`);
   } catch (error) { notify(error.message); }
 });
+$('export-facts').addEventListener('click', () => {
+  if (!facts.length) return notify('资料库为空，没有可导出的内容。');
+  const payload = { schema: 'application-copilot.profileFacts.v1', exportedAt: new Date().toISOString(), facts };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+  const link = element('a'); link.href = url; link.download = 'profile-facts.json'; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  notify('已导出资料字段 JSON（可能含未确认字段），请勿公开分享。');
+});
 
 $('parse-companies').addEventListener('click', async () => {
   try {
@@ -693,6 +772,10 @@ $('parse-companies').addEventListener('click', async () => {
         answers: {},
         stage: 'todo',
         sheetCopiedAt: '',
+        applicationRef: '',
+        appliedAt: '',
+        notes: '',
+        history: [],
         rawSource: raw.rawSource,
       };
       if (existing.has(companyKey(entry))) { duplicate++; continue; }

@@ -126,6 +126,19 @@ export function migrateCompanies(raw) {
         : {},
       stage: Object.hasOwn(STAGES, item.stage) ? item.stage : 'todo',
       sheetCopiedAt: typeof item.sheetCopiedAt === 'string' ? item.sheetCopiedAt : '',
+      applicationRef: typeof item.applicationRef === 'string' ? item.applicationRef : '',
+      appliedAt: typeof item.appliedAt === 'string' ? item.appliedAt : '',
+      notes: typeof item.notes === 'string' ? item.notes : '',
+      history: Array.isArray(item.history)
+        ? item.history
+          .filter(step => step && typeof step === 'object' && typeof step.to === 'string' && Object.hasOwn(STAGES, step.to))
+          .map(step => ({
+            at: typeof step.at === 'string' ? step.at : '',
+            from: typeof step.from === 'string' && Object.hasOwn(STAGES, step.from) ? step.from : 'todo',
+            to: step.to,
+          }))
+          .slice(-50)
+        : [],
       rawSource: typeof item.rawSource === 'string' ? item.rawSource : '',
     });
   }

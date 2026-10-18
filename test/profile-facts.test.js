@@ -17,6 +17,7 @@ test('factsFromResume 生成全部待确认的字段草稿', () => {
   const facts = factsFromResume(profile);
   assert.ok(facts.length >= 8);
   assert.ok(facts.every(fact => fact.status === 'unconfirmed'));
+  assert.ok(facts.every(fact => fact.source === 'resume'));
   const labels = facts.map(fact => fact.label);
   assert.ok(labels.includes('姓名'));
   assert.ok(labels.includes('教育：示例大学'));
@@ -26,11 +27,13 @@ test('factsFromResume 生成全部待确认的字段草稿', () => {
   assert.deepEqual(factsFromResume(null), []);
 });
 
-test('validateFacts 容错并规范状态', () => {
-  const facts = validateFacts([{ label: '电话', value: '123', status: 'confirmed' }, null, 'x', { label: 5 }]);
+test('validateFacts 容错并规范状态与来源', () => {
+  const facts = validateFacts([{ label: '电话', value: '123', status: 'confirmed' }, null, 'x', { label: 5, source: 'resume' }]);
   assert.equal(facts.length, 2);
   assert.equal(facts[0].status, 'confirmed');
+  assert.equal(facts[0].source, 'manual');
   assert.equal(facts[1].label, '');
+  assert.equal(facts[1].source, 'resume');
   assert.deepEqual(validateFacts('nope'), []);
 });
 

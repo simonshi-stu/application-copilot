@@ -165,8 +165,14 @@ pre {
 .fc-pending { border-left-color: var(--warn); }
 .fc-ask { border-left-color: var(--primary); }
 .fc-verify { border-left-color: #8a9a95; }
-.fact-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(160px, 1.6fr) auto auto; gap: 8px; align-items: center; margin: 8px 0; }
+.fact-row { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(140px, 1.5fr) auto auto auto; gap: 8px; align-items: center; margin: 8px 0; }
 .fact-row input { width: 100%; }
+.badge.source { font-size: 11.5px; background: #eef2f1; color: #5f726c; }
+.qa-box { border: 1px solid var(--line); border-left-width: 4px; border-radius: var(--radius-sm); padding: 10px 14px; margin: 10px 0; background: #fbfdfc; }
+.qa-box ul { margin: 4px 0 0; padding-left: 20px; }
+.qa-ok { border-left-color: var(--ok); }
+.qa-warn { border-left-color: var(--warn); }
+.qa-error { border-left-color: var(--danger); }
 .button-mini { padding: 5px 10px; font-size: 13px; }
 .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0 2px; }
 .stat-card {

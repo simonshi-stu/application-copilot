@@ -1,12 +1,14 @@
 // 资料库字段：本机个人信息列表，逐项确认。
 // 只有「已确认」的字段才会进入公司信息卡的「已确认可复用」；解析导入一律为「待确认」。
 
-export function makeFact(label = '', value = '', status = 'unconfirmed') {
+export function makeFact(label = '', value = '', status = 'unconfirmed', source = 'manual') {
   return {
     id: crypto.randomUUID(),
     label: String(label),
     value: String(value),
     status: status === 'confirmed' ? 'confirmed' : 'unconfirmed',
+    source: source === 'resume' ? 'resume' : 'manual',
+    updatedAt: new Date().toISOString(),
   };
 }
 
@@ -19,6 +21,8 @@ export function validateFacts(raw) {
       label: typeof item.label === 'string' ? item.label : '',
       value: typeof item.value === 'string' ? item.value : '',
       status: item.status === 'confirmed' ? 'confirmed' : 'unconfirmed',
+      source: item.source === 'resume' ? 'resume' : 'manual',
+      updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : '',
     }));
 }
 
@@ -28,7 +32,7 @@ export function factsFromResume(profile) {
   const facts = [];
   const push = (label, value) => {
     const text = String(value || '').trim();
-    if (label && text) facts.push(makeFact(label, text));
+    if (label && text) facts.push(makeFact(label, text, 'unconfirmed', 'resume'));
   };
   const personal = profile.personal || {};
   push('姓名', personal.name);

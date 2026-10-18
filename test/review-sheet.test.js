@@ -47,3 +47,17 @@ test('已确认字段进入送审单的可复用区；阶段常量可查', () =>
   assert.equal(STAGE_FLOW.ready, '等待本人提交');
   assert.equal(STAGE_FLOW.skip, '已跳过');
 });
+
+test('备注、申请号与进度记录进入送审单', () => {
+  const sheet = buildReviewSheet({
+    ...entry,
+    applicationRef: 'JOB-123',
+    appliedAt: '2026-10-18',
+    notes: '材料已核对',
+    history: [{ at: '2026-10-18T10:00:00.000Z', from: 'todo', to: 'preparing' }],
+  });
+  assert.match(sheet, /申请号 \/ 岗位ID：JOB-123/);
+  assert.match(sheet, /提交日期（本人填写）：2026-10-18/);
+  assert.match(sheet, /材料已核对/);
+  assert.match(sheet, /待准备 → 核对中/);
+});
