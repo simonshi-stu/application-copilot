@@ -365,6 +365,24 @@ export const TOOL_DEFINITIONS = Object.freeze([
     run: (service, input, context) => service.recordHumanSubmission(input, context),
   },
   {
+    name: 'record_historical_submission',
+    access: 'operator',
+    description: '记录本人对尚未启动队列项的历史投递报告；没有岗位 ID 时保留公司级来源，不等同官网核验。',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['companyId', 'eventId', 'reportedAt', 'reference', 'confirmedBy'],
+      properties: {
+        companyId: id,
+        eventId: id,
+        reportedAt: iso,
+        reference: { type: 'string', minLength: 1, maxLength: 1000 },
+        confirmedBy,
+      },
+    },
+    run: (service, input, context) => service.recordHistoricalSubmission(input, context),
+  },
+  {
     name: 'record_official_verification',
     access: 'operator',
     description: '记录本人从官网只读核验到的提交证据；与本人提交回执分开保存。',

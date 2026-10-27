@@ -57,6 +57,7 @@ const PANEL_COMPANY_STATUS = Object.freeze({
   awaiting_human_submit: 'awaiting_submit',
   held: 'deferred',
   blocked: 'search_blocked',
+  submitted_reported: 'submitted_self_reported',
   completed: 'completed',
   no_positions: 'no_suitable_jobs',
   skipped: 'skipped',
@@ -293,6 +294,7 @@ function buildCapabilities() {
       'manual_job_evidence_entry',
       'job_selection',
       'manual_submission_receipt',
+      'historical_submission_receipt',
       'persistent_issue_queue',
       'local_profile_facts_management',
       'model_role_metadata_only',
@@ -642,7 +644,9 @@ function buildApplication(company, positions, result, panelPositions) {
   const pending = selected.filter((position) => !isPositionTerminal(position.status));
   let kind = 'none';
   let jobIds = [];
-  if (company.status === 'no_positions') {
+  if (company.historicalSubmission && selected.length === 0) {
+    kind = 'self_reported';
+  } else if (company.status === 'no_positions') {
     kind = 'no_suitable_jobs';
   } else if (company.status === 'blocked') {
     kind = 'blocked';
@@ -661,7 +665,7 @@ function buildApplication(company, positions, result, panelPositions) {
     kind = 'pending_submit';
     jobIds = pending.filter((position) => position.status === 'awaiting_human_submit').map((position) => position.id);
   }
-  const reportedAt = reported
+  const reportedAt = company.historicalSubmission?.reportedAt || reported
     .map((position) => position.submission?.reportedAt)
     .filter(Boolean)
     .sort()
@@ -674,7 +678,7 @@ function buildApplication(company, positions, result, panelPositions) {
   return {
     kind,
     jobIds,
-    note: limitText(result || '', 2000),
+    note: limitText(company.historicalSubmission?.reference || result || '', 2000),
     reportedAt,
     verifiedAt,
     panelPositions: panelPositions.map((position) => position.id),
@@ -768,6 +772,7 @@ async function buildCompanySnapshot(ctx, companyId, companyNameById, issues) {
     jobs,
     positions: positions.map((position) => ({ ...position })),
     application: buildApplication(company, positions, result, jobs),
+    historicalSubmission: company.historicalSubmission ? { ...company.historicalSubmission } : null,
     result: limitText(result, 4000),
     note: limitText(company.holdReason || company.skipReason || '', 2000),
     holdReason: company.holdReason || '',
@@ -1283,6 +1288,33 @@ async function runReportSubmitted(ctx, input, deps) {
       position: result.position,
       queue: result.queue,
       note: '已记录本人提交回执；这不是官网核验，也不会自动重投。',
+    },
+    changed: true,
+  };
+}
+
+function normalizeHistoricalSubmission(input) {
+  assertOnlyKeys(input, ['companyId', 'confirmedByUser', 'note']);
+  requireUserConfirmation(input, '记录历史本人已投递');
+  return {
+    companyId: requireString(input.companyId, 'companyId', { max: 128 }),
+    reference: requireString(input.note, '历史投递说明', { max: 1000, preserve: true }),
+  };
+}
+
+async function runHistoricalSubmission(ctx, input, deps) {
+  const result = await deps.invoke(ctx, 'record_historical_submission', {
+    companyId: input.companyId,
+    eventId: deps.newId(),
+    reportedAt: deps.now(),
+    reference: input.reference,
+    confirmedBy: 'user',
+  });
+  return {
+    result: {
+      company: result.company,
+      queue: result.queue,
+      note: '已记录历史本人投递；没有岗位 ID 时保留公司级来源，不等同官网核验，也不会自动重投。',
     },
     changed: true,
   };
@@ -1982,6 +2014,7 @@ defineCommand('user.resume', 'resume', normalizeResume, runResume);
 defineCommand('user.confirmLogin', 'confirmLogin', normalizeConfirmLogin, runConfirmLogin);
 defineCommand('user.selectJobs', 'selectJobs', normalizeSelectJobs, runSelectJobs);
 defineCommand('user.reportSubmitted', 'reportSubmitted', normalizeReportSubmitted, runReportSubmitted);
+defineCommand('user.reportHistoricalSubmission', 'reportHistoricalSubmission', normalizeHistoricalSubmission, runHistoricalSubmission);
 defineCommand('user.markReady', 'markReady', normalizeMarkReady, runMarkReady);
 defineCommand('user.deferCompany', 'deferCompany', normalizeDeferCompany, runDeferCompany);
 defineCommand('user.resumeCompany', 'resumeCompany', normalizeResumeCompany, runResumeCompany);
@@ -2053,6 +2086,7 @@ function statusForErrorCode(code) {
     'POSITION_NOT_PREPARING',
     'BLOCKING_ISSUES',
     'ALREADY_SUBMITTED',
+    'HISTORICAL_SUBMISSION_NOT_ALLOWED',
     'ALREADY_VERIFIED',
     'COMPANY_TERMINAL',
     'COMPANY_HAS_SUBMISSIONS',

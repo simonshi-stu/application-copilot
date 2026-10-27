@@ -115,6 +115,7 @@ export const COMMAND = Object.freeze({
   confirmLogin: 'user.confirmLogin',
   selectJobs: 'user.selectJobs',
   reportSubmitted: 'user.reportSubmitted',
+  reportHistoricalSubmission: 'user.reportHistoricalSubmission',
   markReady: 'user.markReady',
   deferCompany: 'user.deferCompany',
   resumeCompany: 'user.resumeCompany',
@@ -198,6 +199,7 @@ export const CORE_COMPANY_STATUS = Object.freeze({
   awaiting_human_submit: 'awaiting_submit',
   held: 'deferred',
   blocked: 'search_blocked',
+  submitted_reported: 'submitted_self_reported',
   completed: 'completed',
   no_positions: 'no_suitable_jobs',
   skipped: 'skipped',
@@ -343,6 +345,16 @@ export const APPLICATION_META = Object.freeze({
   partial: { label: '部分投递：请逐岗位核对', tone: 'warning' },
   skipped: { label: '未投递：本人跳过', tone: 'neutral' },
 });
+
+export const COMPANY_FILTER_META = Object.freeze({
+  all: { label: '全部', tone: 'neutral' },
+  pending: { label: '待投递', tone: 'warning' },
+  submitted: { label: '已投递', tone: 'success' },
+  no_suitable_jobs: { label: '看过，无合适岗位', tone: 'neutral' },
+  skipped: { label: '已跳过', tone: 'neutral' },
+});
+
+export const COMPANY_FILTERS = Object.freeze(Object.keys(COMPANY_FILTER_META));
 
 export const SEARCH_META = Object.freeze({
   not_started: { label: '尚未检索', tone: 'neutral' },
@@ -557,6 +569,12 @@ export function validateCommandInput(command, input) {
         note: optionalString(input.note, '提交备注', 1000),
       };
     }
+    case COMMAND.reportHistoricalSubmission:
+      return {
+        companyId: requireString(input.companyId, 'companyId', { max: 128 }),
+        note: requireString(input.note, '历史投递说明', { max: 1000, preserve: true }),
+        confirmedByUser: requireUserConfirmation(input, '记录历史本人已投递'),
+      };
     case COMMAND.deferCompany:
       return {
         companyId: requireString(input.companyId, 'companyId', { max: 128 }),
@@ -1143,6 +1161,7 @@ function normalizeCompany(raw) {
     search: normalizeSearch(raw.search),
     jobs,
     application: normalizeApplication(raw.application, panelStatus),
+    historicalSubmission: normalizeHistoricalSubmission(raw.historicalSubmission),
     result: optionalString(raw.result, 'company.result', 4000, true),
     note: optionalString(raw.note, 'company.note', 2000, true),
     holdReason: optionalString(raw.holdReason, 'company.holdReason', 500, true),
@@ -1203,6 +1222,14 @@ function normalizeSubmission(raw) {
   };
 }
 
+function normalizeHistoricalSubmission(raw) {
+  if (!isRecord(raw)) return null;
+  return {
+    reportedAt: optionalString(raw.reportedAt, 'historicalSubmission.reportedAt', 80),
+    reference: optionalString(raw.reference, 'historicalSubmission.reference', 1000, true),
+  };
+}
+
 function normalizeVerification(raw) {
   if (!isRecord(raw)) return null;
   return {
@@ -1228,6 +1255,18 @@ function normalizeApplication(raw, companyStatus = 'unknown') {
     reportedAt: optionalString(value.reportedAt, 'application.reportedAt', 80),
     verifiedAt: optionalString(value.verifiedAt, 'application.verifiedAt', 80),
   };
+}
+
+export function companyApplicationCategory(company) {
+  const kind = company?.application?.kind;
+  if (kind === 'verified' || kind === 'self_reported' || kind === 'partial') return 'submitted';
+  if (kind === 'no_suitable_jobs' || company?.status === 'no_suitable_jobs') return 'no_suitable_jobs';
+  if (kind === 'skipped' || company?.status === 'skipped') return 'skipped';
+  return 'pending';
+}
+
+export function companyApplicationCategoryMeta(company) {
+  return COMPANY_FILTER_META[companyApplicationCategory(company)] || COMPANY_FILTER_META.pending;
 }
 
 function normalizeIssue(raw) {

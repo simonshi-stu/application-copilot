@@ -77,6 +77,24 @@
                 </div>
                 <span id="queue-count" class="count">0</span>
               </div>
+              <div id="application-summary" class="application-summary" aria-label="投递状态汇总"></div>
+              <div class="company-list-tools">
+                <label class="search-label" for="company-search">
+                  <span class="muted small">搜索公司</span>
+                  <input id="company-search" class="native-input" type="search" placeholder="公司名或状态说明" autocomplete="off" />
+                </label>
+                <label class="filter-label" for="company-filter">
+                  <span class="muted small">状态筛选</span>
+                  <select id="company-filter" class="native-select">
+                    <option value="all">全部</option>
+                    <option value="pending">待投递</option>
+                    <option value="submitted">已投递</option>
+                    <option value="no_suitable_jobs">看过，无合适岗位</option>
+                    <option value="skipped">已跳过</option>
+                  </select>
+                </label>
+                <span id="company-list-summary" class="muted small">显示全部 0 家</span>
+              </div>
               <div id="queue-controls" class="queue-controls"></div>
               <div id="queue-message" class="inline-note" hidden></div>
               <div id="company-list" class="company-list"></div>
@@ -205,6 +223,31 @@
             记录本人已提交
           </button>
           <span class="muted small">没有“提交官网”按钮。最终提交始终由本人在官网完成。</span>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="historical-dialog" class="dialog" aria-labelledby="historical-title">
+      <div class="dialog-head">
+        <div>
+          <h2 id="historical-title">记录历史本人已投递</h2>
+          <p class="muted small">
+            适用于尚未启动、但本人已有历史投递记录的公司。没有可靠岗位 ID 时只保存公司级报告，不伪造岗位，也不等同官网核验。
+          </p>
+        </div>
+        <button id="close-historical-button" class="btn ghost" type="button">关闭</button>
+      </div>
+      <form id="historical-form" novalidate>
+        <div id="field-historical-note"></div>
+        <label class="check-row">
+          <input id="historical-confirmation" type="checkbox" />
+          <span>我确认这家公司确实是本人历史上已完成的投递，并理解系统不会据此自动核验或再次投递。</span>
+        </label>
+        <p id="historical-form-error" class="form-error" role="alert" hidden></p>
+        <div class="form-actions">
+          <button id="report-historical-button" class="btn primary" type="button" disabled>
+            保存本人历史记录
+          </button>
         </div>
       </form>
     </dialog>

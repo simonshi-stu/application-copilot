@@ -121,6 +121,22 @@ export const submissionSchema = Object.freeze({
   },
 });
 
+// 历史本人报告没有可靠的岗位 ID 时，仍然要保留一个可审计的公司级
+// 记录。它和岗位提交回执使用不同 schema，避免用虚构的 officialId
+// 拼出一条看似完整的岗位申请。
+export const historicalSubmissionSchema = Object.freeze({
+  type: 'object',
+  additionalProperties: false,
+  required: ['reportedAt', 'reference', 'recordedBy', 'eventId', 'source'],
+  properties: {
+    reportedAt: { type: 'string', minLength: 1, format: 'date-time' },
+    reference: { type: 'string', minLength: 1, maxLength: 1000 },
+    recordedBy: { const: 'user' },
+    eventId: { type: 'string', minLength: 1 },
+    source: { const: 'user_history' },
+  },
+});
+
 export const verificationSchema = Object.freeze({
   type: 'object',
   additionalProperties: false,
@@ -170,6 +186,7 @@ export const companySchema = Object.freeze({
     noPositionsEvidence: { anyOf: [noPositionsEvidenceSchema, { type: 'null' }] },
     holdReason: { type: ['string', 'null'], maxLength: 500 },
     skipReason: { type: ['string', 'null'], maxLength: 500 },
+    historicalSubmission: { anyOf: [historicalSubmissionSchema, { type: 'null' }] },
     checkpoint: {
       type: 'object',
       additionalProperties: false,
@@ -229,6 +246,7 @@ export function createCompany({ id, name, batch = '', links = [], referralCandid
     noPositionsEvidence: null,
     holdReason: null,
     skipReason: null,
+    historicalSubmission: null,
     checkpoint: { phase: COMPANY_STATUS.QUEUED, activePositionId: null, requiresObservation: false, updatedAt: now },
     history: [],
     createdAt: now,
@@ -281,6 +299,7 @@ export function companyIsComplete(company, positions, openBlockingCount = 0) {
 }
 
 export function companyResultText(company, positions) {
+  if (company.historicalSubmission) return '已投递：历史本人记录（待官网核验）';
   if (company.status === COMPANY_STATUS.NO_POSITIONS) return '未投递：没有符合职位';
   if (company.status === COMPANY_STATUS.SKIPPED) {
     return `未投递：本人跳过${company.skipReason ? `（${company.skipReason}）` : ''}`;

@@ -420,6 +420,57 @@ test('暂停阻止自动下家；重启恢复不重放，重复事件幂等', as
   assert.equal((await reopened.summary()).queue.currentCompanyId, nextCompany.company.id);
 });
 
+test('历史本人投递使用公司级终态，不伪造岗位 ID 且禁止再次启动', async t => {
+  const { dir, service } = makeService();
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+
+  const historical = await service.addCompany({
+    name: '虚构历史公司',
+    links: [{ url: 'https://history.example.invalid/jobs', kind: 'apply', source: '虚构历史记录' }],
+  }, operator);
+  const next = await service.addCompany({
+    name: '虚构后续公司',
+    links: [{ url: 'https://next.example.invalid/jobs', kind: 'apply', source: '虚构' }],
+  }, operator);
+
+  const reported = await service.recordHistoricalSubmission({
+    companyId: historical.company.id,
+    eventId: 'historical-submission-1',
+    reportedAt: now,
+    reference: '本人确认历史上已完成投递；岗位官方 ID 待补，禁止重投。',
+    confirmedBy: 'user',
+  }, operator);
+  assert.equal(reported.company.status, 'submitted_reported');
+  assert.equal(reported.company.historicalSubmission.source, 'user_history');
+  assert.deepEqual(reported.company.selectedPositionIds, []);
+  assert.match((await service.getCompany({ companyId: historical.company.id }, operator)).result, /历史本人记录/);
+
+  await assert.rejects(
+    service.recordHistoricalSubmission({
+      companyId: historical.company.id,
+      eventId: 'historical-submission-2',
+      reportedAt: now,
+      reference: '重复记录',
+      confirmedBy: 'user',
+    }, operator),
+    error => error.code === 'ALREADY_SUBMITTED',
+  );
+  await assert.rejects(
+    service.recordHistoricalSubmission({
+      companyId: next.company.id,
+      eventId: 'historical-agent',
+      reportedAt: now,
+      reference: '模型不应记录本人历史投递',
+      confirmedBy: 'user',
+    }, agent),
+    error => error.code === 'FORBIDDEN',
+  );
+
+  const started = await service.startQueue({ eventId: 'historical-start', confirmedBy: 'user' }, operator);
+  assert.equal(started.currentCompanyId, next.company.id);
+  assert.equal((await service.getCompany({ companyId: historical.company.id }, operator)).company.status, 'submitted_reported');
+});
+
 test('重复公司条目合并来源而不创建可重投分身；新批次可入', async t => {
   const { dir, service } = makeService();
   t.after(() => fs.rm(dir, { recursive: true, force: true }));

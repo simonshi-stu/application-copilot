@@ -2,6 +2,8 @@ import { connectHost } from '@openchamber/sdk';
 import { applyHostReady, mountTabs, mountTextField } from '@openchamber/sdk/ui';
 import {
   COMMAND,
+  COMPANY_FILTER_META,
+  COMPANY_FILTERS,
   MODEL_ROLES,
   PROFILE_SECTIONS,
   applicationMeta,
@@ -9,6 +11,8 @@ import {
   buildCommandRequest,
   buildStateRequest,
   countUnresolvedIssues,
+  companyApplicationCategory,
+  companyApplicationCategoryMeta,
   describeCompanyApplication,
   issueSeverityMeta,
   issueStatusMeta,
@@ -97,6 +101,11 @@ function start() {
     modelKeyStatusEls: new Map(),
     submitJobs: [],
     submitNoteDraft: '',
+    historicalNoteDraft: '',
+    historicalNoteHandle: null,
+    pendingHistoricalCompanyId: null,
+    companyFilter: 'all',
+    companyQuery: '',
     deferReasonDraft: '',
     factDrafts: {},
     skipReasonDraft: '',
@@ -149,6 +158,12 @@ function start() {
     submitNoteField: document.querySelector('#field-submit-note'),
     submitConfirmation: document.querySelector('#submit-confirmation'),
     reportSubmittedButton: document.querySelector('#report-submitted-button'),
+    historicalDialog: document.querySelector('#historical-dialog'),
+    historicalForm: document.querySelector('#historical-form'),
+    historicalFormError: document.querySelector('#historical-form-error'),
+    historicalNoteField: document.querySelector('#field-historical-note'),
+    historicalConfirmation: document.querySelector('#historical-confirmation'),
+    reportHistoricalButton: document.querySelector('#report-historical-button'),
     deferDialog: document.querySelector('#defer-dialog'),
     deferForm: document.querySelector('#defer-form'),
     deferFormError: document.querySelector('#defer-form-error'),
@@ -168,6 +183,10 @@ function start() {
     skipConfirmation: document.querySelector('#skip-confirmation'),
     skipFormError: document.querySelector('#skip-form-error'),
     skipConfirmButton: document.querySelector('#confirm-skip-button'),
+    applicationSummary: document.querySelector('#application-summary'),
+    companySearch: document.querySelector('#company-search'),
+    companyFilter: document.querySelector('#company-filter'),
+    companyListSummary: document.querySelector('#company-list-summary'),
   };
 
   const hostTimer = window.setTimeout(() => {
@@ -350,6 +369,18 @@ function start() {
       void loadFromService();
     });
 
+    el.companySearch.addEventListener('input', () => {
+      state.companyQuery = el.companySearch.value;
+      renderCompanyList();
+    });
+    el.companyFilter.addEventListener('change', () => {
+      state.companyFilter = COMPANY_FILTERS.includes(el.companyFilter.value)
+        ? el.companyFilter.value
+        : 'all';
+      renderApplicationSummary();
+      renderCompanyList();
+    });
+
     // OpenChamber guest pages run in a sandbox that does not grant native form
     // submission. Keep the forms for structure and keyboard semantics, but use
     // explicit buttons for actions so the browser cannot block the click before
@@ -384,6 +415,9 @@ function start() {
     document.querySelector('#close-submit-button').addEventListener('click', () => {
       closeDialog(el.submitDialog);
     });
+    document.querySelector('#close-historical-button').addEventListener('click', () => {
+      closeDialog(el.historicalDialog);
+    });
     document.querySelector('#close-defer-button').addEventListener('click', () => {
       closeDialog(el.deferDialog);
     });
@@ -398,6 +432,14 @@ function start() {
     el.submitForm.addEventListener('submit', (event) => {
       event.preventDefault();
       showInlineError(el.submitFormError, '请点击“记录本人已提交”按钮进行明确确认。');
+    });
+    el.historicalConfirmation.addEventListener('change', updateHistoricalButton);
+    el.reportHistoricalButton.addEventListener('click', () => {
+      void reportHistoricalSubmission();
+    });
+    el.historicalForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void reportHistoricalSubmission();
     });
     el.deferCompanyButton.addEventListener('click', () => {
       void deferCompany();
@@ -433,6 +475,7 @@ function start() {
     for (const dialog of [
       el.issuesDialog,
       el.submitDialog,
+      el.historicalDialog,
       el.deferDialog,
       el.factDialog,
       el.skipDialog,
@@ -444,6 +487,7 @@ function start() {
         if (dialog === el.issuesDialog) state.answeringIssueId = null;
         if (dialog === el.factDialog) state.editingFact = null;
         if (dialog === el.skipDialog) state.pendingSkip = null;
+        if (dialog === el.historicalDialog) state.pendingHistoricalCompanyId = null;
       });
     }
   }
@@ -947,6 +991,7 @@ function start() {
     }
 
     renderQueueControls();
+    renderApplicationSummary();
     const message = queue?.message ?? '';
     el.queueMessage.hidden = !message;
     el.queueMessage.textContent = message;
@@ -965,6 +1010,65 @@ function start() {
               : '任务池为空。粘贴公司链接入队；入队不会自动开始。'
           : '任务数据按项目目录保存，未打开项目时不会显示模拟任务。',
       );
+    }
+  }
+
+  function renderApplicationSummary() {
+    const companies = state.workbench?.companies ?? [];
+    el.applicationSummary.replaceChildren();
+    if (!state.workbench) return;
+
+    const counts = {
+      all: companies.length,
+      pending: companies.filter((company) => companyApplicationCategory(company) === 'pending').length,
+      submitted: companies.filter((company) => companyApplicationCategory(company) === 'submitted').length,
+      no_suitable_jobs: companies.filter((company) => companyApplicationCategory(company) === 'no_suitable_jobs').length,
+      skipped: companies.filter((company) => companyApplicationCategory(company) === 'skipped').length,
+    };
+    const reported = companies.filter((company) => company.application.kind === 'self_reported').length;
+    const verified = companies.filter((company) => company.application.kind === 'verified').length;
+    const needsAttention = companies.filter((company) => [
+      'awaiting_user',
+      'awaiting_submit',
+      'search_blocked',
+      'deferred',
+      'failed',
+    ].includes(company.status)).length;
+
+    for (const filter of COMPANY_FILTERS) {
+      const meta = COMPANY_FILTER_META[filter];
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'application-summary-card';
+      button.dataset.tone = meta.tone;
+      button.setAttribute('aria-pressed', String(state.companyFilter === filter));
+      button.addEventListener('click', () => {
+        state.companyFilter = filter;
+        el.companyFilter.value = filter;
+        renderApplicationSummary();
+        renderCompanyList();
+      });
+      const label = document.createElement('span');
+      label.className = 'application-summary-label';
+      label.textContent = meta.label;
+      const count = document.createElement('strong');
+      count.className = 'application-summary-count';
+      count.textContent = String(counts[filter]);
+      button.append(label, count);
+      if (filter === 'submitted' && (reported > 0 || verified > 0)) {
+        const detail = document.createElement('span');
+        detail.className = 'application-summary-detail';
+        detail.textContent = `本人记录 ${reported} · 官网核验 ${verified}`;
+        button.append(detail);
+      }
+      el.applicationSummary.append(button);
+    }
+
+    if (needsAttention > 0) {
+      const note = document.createElement('span');
+      note.className = 'application-summary-note';
+      note.textContent = `待处理 ${needsAttention} 家；“已投递（本人记录）”不会自动变成官网核验。`;
+      el.applicationSummary.append(note);
     }
   }
 
@@ -1014,8 +1118,15 @@ function start() {
     title.textContent = company.name;
     const sub = document.createElement('span');
     sub.className = 'company-sub';
+    const categoryMeta = companyApplicationCategoryMeta(company);
+    sub.append(badge(categoryMeta.label, categoryMeta.tone));
     const status = statusMeta(company.status);
-    sub.append(badge(status.label, status.tone));
+    if (status.label !== categoryMeta.label) sub.append(badge(status.label, status.tone));
+    if (company.application.kind === 'self_reported') {
+      sub.append(textNode('待官网核验'));
+    } else if (company.application.kind === 'verified') {
+      sub.append(textNode('官网已核验'));
+    }
     if (company.referralCodes.length > 0) {
       const unselected = company.referralCodes.filter((code) => !code.selected).length;
       sub.append(textNode(unselected > 0 ? `内推候选 ${company.referralCodes.length}` : '内推已选用'));
@@ -1046,10 +1157,30 @@ function start() {
 
   function renderCompanyList() {
     const companies = state.workbench?.companies ?? [];
+    const visible = companies.filter((company) => {
+      const category = companyApplicationCategory(company);
+      const filterMatches = state.companyFilter === 'all' || category === state.companyFilter;
+      const query = state.companyQuery.trim().toLocaleLowerCase();
+      const queryMatches = !query || [
+        company.name,
+        company.result,
+        company.note,
+        company.application?.note,
+      ].some((value) => String(value || '').toLocaleLowerCase().includes(query));
+      return filterMatches && queryMatches;
+    });
     el.companyList.replaceChildren();
-    companies.forEach((company, index) => {
+    visible.forEach((company, index) => {
       el.companyList.append(companyRow(company, index));
     });
+    el.companyListSummary.textContent = visible.length === companies.length
+      ? `显示全部 ${companies.length} 家`
+      : `显示 ${visible.length} / ${companies.length} 家`;
+    renderEmpty(
+      el.queueEmpty,
+      companies.length > 0 && visible.length === 0 ? '没有匹配的公司' : '',
+      companies.length > 0 && visible.length === 0 ? '请调整搜索词或状态筛选。' : '',
+    );
     el.poolLayout.classList.toggle('detail-visible', Boolean(state.selectedCompanyId));
   }
 
@@ -1123,8 +1254,10 @@ function start() {
     const title = document.createElement('h3');
     title.textContent = company.name;
     const status = statusMeta(company.status);
+    const categoryMeta = companyApplicationCategoryMeta(company);
     const queuePosition = company.queuePosition ? `队列 ${company.queuePosition}` : '队列位置未知';
-    titleWrap.append(back, title, badge(status.label, status.tone));
+    titleWrap.append(back, title, badge(categoryMeta.label, categoryMeta.tone));
+    if (status.label !== categoryMeta.label) titleWrap.append(badge(status.label, status.tone));
     if (isCurrentActiveCompany(company)) titleWrap.append(badge('当前活动公司', 'primary'));
     const meta = div('detail-meta');
     meta.append(textNode(queuePosition), textNode(`更新：${formatTime(company.updatedAt) || '未知'}`));
@@ -1872,6 +2005,10 @@ function start() {
         ? `${formatTime(company.application.verifiedAt)} · 已由官网记录核验`
         : '未核验。本人报告不会自动变成官网核验。',
     );
+    if (company.historicalSubmission) {
+      appendFact(grid, '历史记录来源', '本人历史报告（公司级记录；未补写虚构岗位 ID）');
+      appendFact(grid, '历史说明', company.historicalSubmission.reference || '未提供说明。');
+    }
     if (company.application.kind === 'no_suitable_jobs') {
       appendFact(grid, '无岗位依据', '后端必须有可靠检索来源与时间；不能因检索受阻而跳过。');
     }
@@ -1886,6 +2023,14 @@ function start() {
       ? '只有当前活动岗位处于“待本人提交”、无阻断问题且本人已完成官网提交时才能记录。'
       : '只记录本人报告，不会代提交或代核验。';
     actions.append(report);
+
+    if (canReportHistorical(company)) {
+      const historical = actionButton('记录历史本人已投递', 'outline small', () => {
+        openHistoricalDialog(company);
+      });
+      historical.title = '适用于尚未启动且没有可靠岗位 ID 的历史记录；只写入本人报告，不等同官网核验。';
+      actions.append(historical);
+    }
 
     if (company.application.kind === 'self_reported') {
       actions.append(textNode('这是本人记录，仍待官网核验；不会因此重复投递。', 'muted small'));
@@ -2036,6 +2181,77 @@ function start() {
       closeDialog(el.submitDialog);
       state.submitNoteHandle?.update({ value: '' });
       state.submitNoteDraft = '';
+    }
+  }
+
+  function canReportHistorical(company) {
+    return Boolean(
+      isReadyForCommands() &&
+        company?.coreStatus === 'queued' &&
+        company.application?.kind === 'none' &&
+        !company.historicalSubmission,
+    );
+  }
+
+  function openHistoricalDialog(company) {
+    if (!canReportHistorical(company)) return;
+    state.pendingHistoricalCompanyId = company.id;
+    state.historicalNoteDraft = '';
+    el.historicalFormError.hidden = true;
+    el.historicalFormError.textContent = '';
+    el.historicalConfirmation.checked = false;
+    if (!state.historicalNoteHandle) {
+      state.historicalNoteHandle = mountTextField(el.historicalNoteField, {
+        label: '历史投递说明（必填）',
+        value: '',
+        placeholder: '例如：本人确认历史上已完成投递；岗位官方 ID 待补，禁止重投。',
+        multiline: true,
+        rows: 4,
+        onChange: (value) => {
+          state.historicalNoteDraft = value;
+          updateHistoricalButton();
+        },
+      });
+    } else {
+      state.historicalNoteHandle.update({ value: '' });
+    }
+    updateHistoricalButton();
+    openDialog(el.historicalDialog);
+  }
+
+  function updateHistoricalButton() {
+    el.reportHistoricalButton.disabled =
+      !isReadyForCommands() ||
+      !state.pendingHistoricalCompanyId ||
+      !el.historicalConfirmation.checked ||
+      !state.historicalNoteDraft.trim();
+  }
+
+  async function reportHistoricalSubmission() {
+    if (!state.pendingHistoricalCompanyId) return;
+    if (!state.historicalNoteDraft.trim()) {
+      showInlineError(el.historicalFormError, '请填写历史投递说明。');
+      return;
+    }
+    if (!el.historicalConfirmation.checked) {
+      showInlineError(el.historicalFormError, '请先由本人确认这条历史记录属实。');
+      return;
+    }
+    showInlineError(el.historicalFormError, '');
+    const ok = await runCommand(
+      COMMAND.reportHistoricalSubmission,
+      {
+        companyId: state.pendingHistoricalCompanyId,
+        note: state.historicalNoteDraft,
+        confirmedByUser: true,
+      },
+      { successMessage: '已记录历史本人投递；不会自动重投，也不会变成官网核验。' },
+    );
+    if (ok) {
+      state.pendingHistoricalCompanyId = null;
+      state.historicalNoteDraft = '';
+      state.historicalNoteHandle?.update({ value: '' });
+      closeDialog(el.historicalDialog);
     }
   }
 
@@ -2929,6 +3145,7 @@ function start() {
         !canSelectJobs(company);
     }
     updateSubmitButton();
+    updateHistoricalButton();
     updateSkipButton();
   }
 

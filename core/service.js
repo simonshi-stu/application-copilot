@@ -29,6 +29,7 @@ import {
   createCompany,
   createPosition,
   findApplicationDuplicate,
+  historicalSubmissionSchema,
   noPositionsEvidenceSchema,
   normalizeOfficialId,
   positionSchema,
@@ -1006,6 +1007,45 @@ export function createWorkbenchService({
     }));
   }
 
+  async function recordHistoricalSubmission(input, context) {
+    assertOperator(context, 'recordHistoricalSubmission');
+    assertHumanConfirmation(input, '记录历史本人提交');
+    requireEventId(input, '记录历史本人提交');
+    const submission = {
+      reportedAt: input.reportedAt,
+      reference: typeof input.reference === 'string' ? input.reference : '',
+      recordedBy: 'user',
+      eventId: input.eventId,
+      source: 'user_history',
+    };
+    validateSchema(submission, historicalSubmissionSchema);
+    return serial(() => mutate({
+      eventId: input.eventId,
+      type: 'historical_submission',
+      companyId: input.companyId,
+      fingerprint: {
+        companyId: input.companyId,
+        reportedAt: input.reportedAt,
+        reference: submission.reference,
+      },
+    }, local => {
+      const company = findCompany(input.companyId);
+      if (company.historicalSubmission) {
+        throw new WorkflowError('ALREADY_SUBMITTED', '该公司已有历史本人提交记录，禁止重复记录。');
+      }
+      if (selectedFor(company).some(position => position.submission || position.verification || blocksResubmission(position.status))) {
+        throw new WorkflowError('ALREADY_SUBMITTED', '该公司已有岗位提交或核验记录，不能再写入历史公司级报告。');
+      }
+      if (company.status !== COMPANY_STATUS.QUEUED) {
+        throw new WorkflowError('HISTORICAL_SUBMISSION_NOT_ALLOWED', '历史本人报告只允许用于尚未启动的队列项；运行中的任务请按岗位流程记录。');
+      }
+      company.historicalSubmission = submission;
+      company.activePositionId = null;
+      transitionCompany(company, COMPANY_STATUS.SUBMITTED_REPORTED, 'historical_submission_receipt', now());
+      return { company: clone(company), queue: clone(local.queue) };
+    }));
+  }
+
   async function recordOfficialVerification(input, context) {
     assertOperator(context, 'recordOfficialVerification');
     assertHumanConfirmation(input, '记录官网核验');
@@ -1288,6 +1328,7 @@ export function createWorkbenchService({
     answerIssue,
     resolveIssue,
     recordHumanSubmission,
+    recordHistoricalSubmission,
     recordOfficialVerification,
     skipPosition,
     skipCompany,

@@ -243,6 +243,89 @@ h3 {
   margin-bottom: 0;
 }
 
+.application-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.application-summary-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--ac-border);
+  border-radius: calc(var(--ac-radius) - 2px);
+  background: var(--ac-subtle);
+  color: var(--ac-fg);
+  text-align: left;
+}
+
+.application-summary-card:hover,
+.application-summary-card[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--ac-primary) 42%, var(--ac-border));
+  background: var(--ac-selection);
+}
+
+.application-summary-card[data-tone="success"] .application-summary-count {
+  color: var(--ac-success);
+}
+
+.application-summary-card[data-tone="warning"] .application-summary-count {
+  color: var(--ac-warning);
+}
+
+.application-summary-label {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--ac-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.application-summary-count {
+  font-size: 18px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.application-summary-detail,
+.application-summary-note {
+  color: var(--ac-muted);
+  font-size: 10px;
+}
+
+.application-summary-note {
+  grid-column: 1 / -1;
+  padding: 2px 3px;
+}
+
+.company-list-tools {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(130px, 0.8fr) auto;
+  align-items: end;
+  gap: 7px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ac-border);
+}
+
+.search-label,
+.filter-label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.company-list-tools > .muted {
+  padding-bottom: 7px;
+  text-align: right;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -1247,6 +1330,20 @@ textarea.native-input {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .application-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .company-list-tools {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .company-list-tools > .muted {
+    grid-column: 1 / -1;
+    padding-bottom: 0;
+    text-align: left;
+  }
+
   .pool-layout:not(.detail-visible) .detail-pane {
     display: none;
   }
@@ -1292,6 +1389,18 @@ textarea.native-input {
 
   .view-head {
     gap: 8px;
+  }
+
+  .application-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .company-list-tools {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .company-list-tools > .muted {
+    grid-column: auto;
   }
 
   .view-head > .btn {
