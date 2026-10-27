@@ -75,6 +75,8 @@ npm run package:openchamber
 
 打包产物为 `artifacts/application-copilot-openchamber-v0.5.0.zip`。解包后的服务已通过认证健康检查，实际 OpenChamber 2.3.2 也已完成安装、授权和虚构入队持久化验证；这不等于真实招聘网站流程已经通过。构建或安全检查失败时不要安装残缺包；仓库 URL 安装也要求该版本已包含完整预构建文件。公开发布时应把 ZIP 作为 GitHub Release 附件，不要把 `private/` 或 `artifacts/` 目录提交进仓库。日常使用由 OpenChamber 启动插件服务，**不需要你手工打开 localhost**。
 
+最新插件 ZIP：<https://github.com/simonshi-stu/application-copilot/releases/latest>
+
 ### 也可以用原有网页／Chrome 扩展
 
 直接打开[网页工作台](https://simonshi-stu.github.io/application-copilot/)，或在 Chrome／Edge 的扩展管理页加载 `extension/` 文件夹。它们适合资料整理和手动复制，不会因此获得新版插件的网站执行能力。

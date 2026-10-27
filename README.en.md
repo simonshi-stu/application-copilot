@@ -75,6 +75,8 @@ npm run package:openchamber
 
 The package is `artifacts/application-copilot-openchamber-v0.5.0.zip`. Its unpacked service passed authenticated health checks, and OpenChamber 2.3.2 installation, authorization, and fictional enqueue persistence have also been verified; this does not verify a real job-site flow. Do not install an incomplete package after a failed build or safety check. Git-URL installation also requires a version with complete prebuilt files. For public distribution, attach the ZIP to a GitHub Release rather than committing `private/` or `artifacts/`. OpenChamber starts the service when needed; **you do not need to launch a localhost preview yourself**.
 
+Latest extension ZIP: <https://github.com/simonshi-stu/application-copilot/releases/latest>
+
 ### Use the original web or Chrome extension
 
 Open the [web workspace](https://simonshi-stu.github.io/application-copilot/), or load the `extension/` folder from Chrome/Edge's extension manager. These are for preparation and manual copying; they do not gain the new extension's site-execution abilities merely by being opened.
