@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { toolByName } from '../mcp/tools.mjs';
 
 const fact = { id: '1', label: '姓名', value: '测试同学', status: 'confirmed', source: 'manual' };
-const block = { id: 'b1', kind: 'internship_content', item: '示例公司', text: '开发样例。', approved: true };
+const block = { id: 'b1', kind: 'internship_content', item: '示例公司', text: '开发样例。', approved: true, approvedText: '开发样例。' };
 const entry = {
   company: '示例公司',
   links: [{ url: 'https://x.example.invalid/jobs' }],

@@ -1,6 +1,8 @@
 # 部署与在线演示
 
-本项目的界面是**纯静态文件**（`extension/`），没有后端、没有构建步骤，也不需要环境变量。部署后所有数据仍保存在访问者自己的浏览器里（`localStorage`；作为扩展运行时使用 `chrome.storage.local`），不会上传服务器。
+原有网页资料工作台位于 `extension/`，可直接静态发布，不需要模型 Key 或后端才能整理资料。它使用 `localStorage`，Chrome／Edge 扩展模式使用 `chrome.storage.local`。主动开启云模型检查时会向所配置的接口发送经授权的资料，不能把静态托管理解成资料绝不外发。
+
+**GitHub Pages 只提供网页资料工作台，不会运行 OpenChamber 插件服务、stdio MCP 或网站执行器。** OpenChamber 扩展需作为插件包安装，不能用打开 Pages 来代替安装；其构建、包白名单和安装说明随插件实现另行提供。
 
 ## 方式一：GitHub Pages（已启用）
 
@@ -52,7 +54,7 @@ jobs:
 - 输出目录 / Publish directory：`extension`
 - Framework preset：None / Other
 
-部署后的站点仍是纯静态页面，访问者数据只存在其浏览器。
+部署后的站点仍是纯静态页面，默认记录位于访问者浏览器；云模型调用的数据发送范围另行授权。
 
 ## 方式三：本地运行
 

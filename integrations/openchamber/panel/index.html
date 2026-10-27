@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Application Copilot · 投递任务池</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="boot" class="boot">
+      <div class="boot-card">
+        <div class="brand-mark" aria-hidden="true">AC</div>
+        <h1>投递任务池</h1>
+        <p id="boot-message">正在连接 OpenChamber…</p>
+        <p class="boot-hint">任务与资料只通过当前项目的本地服务读取，不使用模拟数据。</p>
+      </div>
+    </div>
+
+    <div id="app" hidden>
+      <header class="app-header">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">AC</div>
+          <div class="brand-text">
+            <h1>投递任务池</h1>
+            <p id="project-label" class="muted">项目未加载</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <span id="queue-pill" class="badge" data-tone="neutral">状态未知</span>
+          <button id="refresh-button" class="btn ghost" type="button" title="重新读取本地服务状态">
+            刷新
+          </button>
+        </div>
+      </header>
+
+      <nav id="tabs" class="tabs-host" aria-label="工作台分区"></nav>
+
+      <div id="global-banner" class="banner" role="status" aria-live="polite" hidden></div>
+
+      <main class="app-main">
+        <section id="view-pool" class="app-view" aria-labelledby="pool-heading">
+          <div class="view-head">
+            <div>
+              <h2 id="pool-heading">任务池</h2>
+              <p class="muted">
+                先入队，再由本人开始。入队、检索和保存草稿都不等于登录、提交或官网核验。
+              </p>
+            </div>
+            <button id="open-issues-button" class="btn outline" type="button">
+              集中处理问题 <span id="issues-count" class="count">0</span>
+            </button>
+          </div>
+
+          <details id="queue-form-details" class="card queue-form">
+            <summary>把公司链接加入任务池</summary>
+            <form id="queue-form" novalidate>
+              <div class="form-grid">
+                <div id="field-queue-url"></div>
+                <div id="field-queue-code"></div>
+                <div id="field-queue-company"></div>
+                <div id="field-queue-source"></div>
+              </div>
+              <p id="queue-form-error" class="form-error" role="alert" hidden></p>
+              <div class="form-actions">
+                <button id="enqueue-button" class="btn primary" type="button">加入任务池</button>
+                <span class="muted small">内推码可不填；多候选不会自动选用。入队不会自动开始。</span>
+              </div>
+            </form>
+          </details>
+
+          <div class="pool-layout">
+            <section class="card list-pane" aria-label="公司队列">
+              <div class="section-head">
+                <div>
+                  <h3>公司队列</h3>
+                  <p id="queue-summary" class="muted small">尚未读取状态</p>
+                </div>
+                <span id="queue-count" class="count">0</span>
+              </div>
+              <div id="queue-controls" class="queue-controls"></div>
+              <div id="queue-message" class="inline-note" hidden></div>
+              <div id="company-list" class="company-list"></div>
+              <div id="queue-empty" class="empty-slot"></div>
+            </section>
+
+            <section id="company-detail" class="card detail-pane" aria-label="公司详情">
+              <div id="detail-empty" class="empty-slot"></div>
+              <div id="detail-content" hidden></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="view-profile" class="app-view" aria-labelledby="profile-heading" hidden>
+          <div class="view-head">
+            <div>
+              <h2 id="profile-heading">个人资料</h2>
+              <p class="muted">
+                这里只导入当前一条最小字段。原文原样保留，导入后仍是待确认，确认前不会用于填写。
+                项目内容与项目职责分开归档；同一项目请使用相同的经历编号。未提交草稿只属于当前项目。
+              </p>
+            </div>
+          </div>
+
+          <div class="two-column">
+            <section class="card">
+              <h3>导入最小字段</h3>
+              <form id="profile-form" novalidate>
+                <div id="field-profile-section"></div>
+                <div id="field-profile-entity"></div>
+                <div id="field-profile-label"></div>
+                <div id="field-profile-raw"></div>
+                <div id="field-profile-source"></div>
+                <div id="profile-sensitive-warning" class="warning-note" hidden></div>
+                <p id="profile-form-error" class="form-error" role="alert" hidden></p>
+                <div class="form-actions">
+                  <button id="import-fact-button" class="btn primary" type="button">
+                    导入为待确认字段
+                  </button>
+                  <span class="muted small">不编辑、不概括原文；一条一条导入。</span>
+                </div>
+              </form>
+            </section>
+
+            <section class="card">
+              <div class="section-head">
+                <div>
+                  <h3>资料条目</h3>
+                  <p class="muted small">确认是本人动作；修改原文请重新导入新条目。</p>
+                </div>
+                <span id="facts-count" class="count">0</span>
+              </div>
+              <div id="facts-list" class="facts-list"></div>
+              <div id="facts-empty" class="empty-slot"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="view-models" class="app-view" aria-labelledby="models-heading" hidden>
+          <div class="view-head">
+            <div>
+              <h2 id="models-heading">角色模型</h2>
+              <p class="muted">
+                角色模型只通过本地服务的受控路由执行；密钥仅保存在本宿主进程内存，
+                不落盘、不回显、不导出，重启需重新输入。
+              </p>
+            </div>
+          </div>
+
+          <div id="model-runtime-note" class="banner model-runtime-note" data-tone="warning">
+            <strong>保存角色选择不代表模型已运行。</strong>
+            <span id="model-runtime-note-text">正在读取本地服务能力…</span>
+          </div>
+
+          <div id="model-cards" class="model-grid"></div>
+
+          <div class="form-actions sticky-actions">
+            <button id="save-models-button" class="btn primary" type="button">保存角色配置</button>
+            <span id="models-error" class="form-error" role="alert" hidden></span>
+          </div>
+
+          <section id="service-info" class="card service-info" aria-label="本地服务信息">
+            <h3>本地服务</h3>
+            <div id="service-info-body" class="muted small">尚未连接。</div>
+            <p class="muted small">
+              密钥字段为密码输入，仅保存在当前宿主进程内存；保存后不回显、不导出，服务重启后需重新输入。
+            </p>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="issues-dialog" class="dialog issues-dialog" aria-labelledby="issues-title">
+      <div class="dialog-head">
+        <div>
+          <h2 id="issues-title">需要你处理</h2>
+          <p class="muted small">关闭窗口只隐藏问题，不会自动解决，也不会把任务标为完成。</p>
+        </div>
+        <button id="close-issues-button" class="btn ghost" type="button">关闭</button>
+      </div>
+      <div id="issues-scope" class="inline-note" hidden></div>
+      <div id="issues-list" class="issues-list"></div>
+      <div id="issues-empty" class="empty-slot"></div>
+    </dialog>
+
+    <dialog id="submit-dialog" class="dialog" aria-labelledby="submit-title">
+      <div class="dialog-head">
+        <div>
+          <h2 id="submit-title">记录本人已提交</h2>
+          <p class="muted small">
+            本操作只记录你在招聘官网由本人完成的提交，不会代为提交，也不会把官网核验标记为通过。
+          </p>
+        </div>
+        <button id="close-submit-button" class="btn ghost" type="button">关闭</button>
+      </div>
+      <form id="submit-form" novalidate>
+        <div id="field-submit-job"></div>
+        <div id="field-submit-note"></div>
+        <label class="check-row">
+          <input id="submit-confirmation" type="checkbox" />
+          <span>我确认已经在招聘官网由本人完成该岗位的提交，并理解这仍是“本人记录、待官网核验”。</span>
+        </label>
+        <p id="submit-form-error" class="form-error" role="alert" hidden></p>
+        <div class="form-actions">
+          <button id="report-submitted-button" class="btn primary" type="button" disabled>
+            记录本人已提交
+          </button>
+          <span class="muted small">没有“提交官网”按钮。最终提交始终由本人在官网完成。</span>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="defer-dialog" class="dialog" aria-labelledby="defer-title">
+      <div class="dialog-head">
+        <div>
+          <h2 id="defer-title">暂挂此公司</h2>
+          <p class="muted small">保留现场和问题，不标为完成；恢复后继续原任务。</p>
+        </div>
+        <button id="close-defer-button" class="btn ghost" type="button">关闭</button>
+      </div>
+      <form id="defer-form" novalidate>
+        <div id="field-defer-reason"></div>
+        <p id="defer-form-error" class="form-error" role="alert" hidden></p>
+        <div class="form-actions">
+          <button id="defer-company-button" class="btn outline" type="button">暂挂并保留现场</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="fact-dialog" class="dialog" aria-labelledby="fact-title">
+      <div class="dialog-head">
+        <div>
+          <h2 id="fact-title">修订资料</h2>
+          <p class="muted small">只修改这一条资料；保存后原确认会失效，需要本人重新确认。原文来源不变。</p>
+        </div>
+        <button id="close-fact-button" class="btn ghost" type="button">关闭</button>
+      </div>
+      <form id="fact-form" novalidate>
+        <div id="field-fact-label"></div>
+        <div id="field-fact-raw"></div>
+        <div id="field-fact-entity"></div>
+        <p id="fact-form-error" class="form-error" role="alert" hidden></p>
+        <div class="form-actions">
+          <button id="save-fact-button" class="btn primary" type="button">保存修订（撤销原确认）</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="skip-dialog" class="dialog" aria-labelledby="skip-title">
+      <div class="dialog-head">
+        <div>
+          <h2 id="skip-title">记录本人跳过</h2>
+          <p id="skip-description" class="muted small">
+            跳过必须填写真实原因；不会写成“没有符合职位”，也不会删除已有问题或记录。
+          </p>
+        </div>
+        <button id="close-skip-button" class="btn ghost" type="button">关闭</button>
+      </div>
+      <form id="skip-form" novalidate>
+        <div id="field-skip-reason"></div>
+        <label class="check-row">
+          <input id="skip-confirmation" type="checkbox" />
+          <span>我确认这是本人主动跳过的真实原因，不是“没有合适岗位”或自动检索结论。</span>
+        </label>
+        <p id="skip-form-error" class="form-error" role="alert" hidden></p>
+        <div class="form-actions">
+          <button id="confirm-skip-button" class="btn danger" type="button" disabled>
+            记录本人跳过
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="./main.js"></script>
+  </body>
+</html>

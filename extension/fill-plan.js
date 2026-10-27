@@ -2,26 +2,26 @@
 // 只使用已确认字段/段落与本人回答；待确认项会标注，不能当作已确认内容。
 
 import { BLOCK_LABELS } from './field-cards.js';
+import { textForCopy } from './blocks.js';
 
 export function buildFillPlan(entry = {}, { facts = [], blocks = [] } = {}) {
   const items = [];
   const seen = new Map();
   const push = ({ label, value, source, status = 'ready' }) => {
-    const text = String(value ?? '').trim();
-    if (!label || !text) return;
+    if (!label || typeof value !== 'string' || !value.trim()) return;
     const count = seen.get(label) || 0;
     seen.set(label, count + 1);
     items.push({
       key: `${label}#${count}`,
       label: count ? `${label}（${count + 1}）` : label,
-      value: text,
+      value,
       source,
       status,
     });
   };
 
   for (const fact of facts) {
-    if (!String(fact.value || '').trim()) continue;
+    if (typeof fact?.value !== 'string' || !fact.value.trim()) continue;
     push({
       label: fact.label,
       value: fact.value,
@@ -31,10 +31,13 @@ export function buildFillPlan(entry = {}, { facts = [], blocks = [] } = {}) {
   }
 
   for (const block of blocks) {
-    if (!block?.approved) continue;
+    // 复用 blocks.js 的确认版本校验：仅 approved 不够，确认文本必须仍与当前原文一致。
+    let value;
+    try { value = textForCopy(block); }
+    catch { continue; }
     push({
       label: `${BLOCK_LABELS[block.kind] || '段落'}${block.item ? `｜${block.item}` : ''}`,
-      value: block.text,
+      value,
       source: '段落库 · 已确认',
     });
   }

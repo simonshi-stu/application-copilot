@@ -9,6 +9,7 @@ export const DEFAULT_AI_CONFIG = Object.freeze({
   model: '',
   apiKey: '',
   autoReview: false,
+  sendConsent: false,
 });
 
 function normalize(config = {}) {
@@ -17,6 +18,8 @@ function normalize(config = {}) {
     model: String(config.model || '').trim(),
     apiKey: String(config.apiKey || '').trim(),
     autoReview: Boolean(config.autoReview),
+    // 外发授权必须由本人显式勾选；配置导入或旧数据不自动升级为已授权。
+    sendConsent: Boolean(config.sendConsent),
   };
 }
 

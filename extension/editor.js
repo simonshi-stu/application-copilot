@@ -4,13 +4,13 @@ import { extractDocx } from './docx.js';
 import { parseCompanies, companyKey } from './company-parser.js';
 import { INDUSTRIES, NATURES, classifyCompany, setIndustry } from './company-classifier.js';
 import { buildFieldCard } from './field-cards.js';
-import { factsFromResume, makeFact, validateFacts } from './profile-facts.js';
+import { factsFromResume, makeFact, validateFacts, reviseFact, confirmFact } from './profile-facts.js';
 import { STAGES, STAGE_FLOW, buildReviewSheet } from './review-sheet.js';
 import { computeFlowSteps } from './flow-steps.js';
 import { buildQaReport } from './qa-report.js';
 import { buildFillPlan, fillPlanProgress } from './fill-plan.js';
 import { DEFAULT_AI_CONFIG, loadAiConfig, saveAiConfig, clearAiConfig } from './ai-config.js';
-import { buildReviewPrompt, requestAiReview } from './ai-review.js';
+import { buildReviewPrompt, requestAiReview, describeReviewScope } from './ai-review.js';
 import { KEYS, loadAll, saveAll, migrateCompanies } from './storage.js';
 
 const $ = id => document.getElementById(id);
@@ -150,15 +150,27 @@ function renderFacts() {
   }
   for (const fact of facts) {
     const row = element('div', undefined, 'fact-row');
-    const label = element('input'); label.type = 'text'; label.value = fact.label; label.placeholder = '字段名';
-    label.addEventListener('input', () => { fact.label = label.value; persist().catch(() => notify('本地保存失败。')); });
-    const value = element('input'); value.type = 'text'; value.value = fact.value; value.placeholder = '内容';
-    value.addEventListener('input', () => { fact.value = value.value; persist().catch(() => notify('本地保存失败。')); });
-    const confirmed = fact.status === 'confirmed';
-    const status = element('button', confirmed ? '已确认' : '待确认', `button-mini ${confirmed ? '' : 'secondary'}`.trim());
+    const status = element('button');
     status.type = 'button';
+    const syncStatus = () => {
+      const confirmed = fact.status === 'confirmed';
+      status.textContent = confirmed ? '已确认' : '待确认';
+      status.className = `button-mini ${confirmed ? '' : 'secondary'}`.trim();
+    };
+    syncStatus();
+    const edit = patch => {
+      const wasConfirmed = fact.status === 'confirmed';
+      Object.assign(fact, reviseFact(fact, patch));
+      syncStatus();
+      persist().catch(() => notify('本地保存失败。'));
+      if (wasConfirmed) notify('字段已修改，之前的人工确认已撤销，请重新核对确认。');
+    };
+    const label = element('input'); label.type = 'text'; label.value = fact.label; label.placeholder = '字段名';
+    label.addEventListener('input', () => { edit({ label: label.value }); });
+    const value = element('input'); value.type = 'text'; value.value = fact.value; value.placeholder = '内容';
+    value.addEventListener('input', () => { edit({ value: value.value }); });
     status.addEventListener('click', async () => {
-      fact.status = confirmed ? 'unconfirmed' : 'confirmed';
+      Object.assign(fact, fact.status === 'confirmed' ? reviseFact(fact, {}) : confirmFact(fact));
       try {
         await persist(); renderFacts();
         notify(fact.status === 'confirmed'
@@ -469,24 +481,31 @@ function buildAiSection(entry) {
   const aiTitle = element('p', '让模型检查（可选）', 'card-title');
   aiTitle.append(tip('会把这家公司和已确认资料发送到你设置的模型接口；可能收费，只给建议，不改字段。'));
   head.append(aiTitle);
+  const configured = Boolean(aiConfig.apiKey && aiConfig.model);
   const run = element('button', '检查一次', 'button-mini secondary'); run.type = 'button';
-  run.disabled = !(aiConfig.apiKey && aiConfig.model);
+  run.disabled = !(configured && aiConfig.sendConsent);
   run.addEventListener('click', () => runAiReview(entry));
   head.append(run);
   box.append(head);
-  if (!(aiConfig.apiKey && aiConfig.model)) {
-    box.append(element('p', '还没配置模型。去「设置」填写，或复制提示词到任意模型。', 'hint'));
-    const copyPrompt = element('button', '复制提示词', 'button-mini secondary'); copyPrompt.type = 'button';
-    copyPrompt.addEventListener('click', async () => {
-      const { system, user } = buildReviewPrompt(entry, { facts, blocks });
-      try { await navigator.clipboard.writeText(`${system}\n\n---\n\n${user}`); notify('提示词已复制，粘贴给任意模型即可。'); }
-      catch { notify('复制失败，请手动选择文本。'); }
-    });
-    box.append(copyPrompt);
-    return box;
+  const scope = describeReviewScope(entry, { facts, blocks });
+  const scopeParts = [];
+  if (scope.factLabels.length) scopeParts.push(`已确认字段 ${scope.factLabels.length} 项（${scope.factLabels.join('、')}）`);
+  if (scope.blockLabels.length) scopeParts.push(`已确认原文 ${scope.blockLabels.length} 段`);
+  if (scope.answerQuestions.length) scopeParts.push(`公司补充 ${scope.answerQuestions.length} 项`);
+  if (scope.includesReferral) scopeParts.push('已选内推码');
+  const excludedParts = [];
+  if (scope.excluded.unconfirmedFacts) excludedParts.push(`未确认字段 ${scope.excluded.unconfirmedFacts}`);
+  if (scope.excluded.sensitiveFacts) excludedParts.push(`家庭/敏感字段 ${scope.excluded.sensitiveFacts}`);
+  if (scope.excluded.unconfirmedOrChangedBlocks) excludedParts.push(`未确认或已修改段落 ${scope.excluded.unconfirmedOrChangedBlocks}`);
+  if (scope.excluded.notes) excludedParts.push('备注');
+  box.append(element('p', `发送范围：当前公司与岗位选择、${scopeParts.join('、') || '无个人资料'}。${excludedParts.length ? `不发送：${excludedParts.join('、')}。` : ''}`, 'hint'));
+  if (!configured) {
+    box.append(element('p', '还没配置模型。去「设置」填写，或复制提示词到任意模型（复制不会联网）。', 'hint'));
+  } else if (!aiConfig.sendConsent) {
+    box.append(element('p', '尚未开启外发授权。请到「设置」阅读发送范围并显式勾选；本工具不会默认发送。', 'conflict'));
   }
-  box.append(element('p', aiConfig.autoReview ? '自动检查已开：打开公司详情调用一次。只提示，不改字段。' : '点「检查一次」看看有没有漏填或矛盾。只提示，不改字段。', 'hint'));
-  if (entry.aiReview) {
+  const renderLastReview = () => {
+    if (!entry.aiReview) return;
     box.append(element('p', `上次检查：${entry.aiReview.at ? entry.aiReview.at.slice(0, 16).replace('T', ' ') : '时间未知'}`, 'hint'));
     if (!entry.aiReview.findings.length) box.append(element('p', '未发现问题。'));
     else {
@@ -496,17 +515,31 @@ function buildAiSection(entry) {
       }
       box.append(ul);
     }
+  };
+  if (!configured || !aiConfig.sendConsent) {
+    const copyPrompt = element('button', '复制提示词', 'button-mini secondary'); copyPrompt.type = 'button';
+    copyPrompt.addEventListener('click', async () => {
+      const { system, user } = buildReviewPrompt(entry, { facts, blocks });
+      try { await navigator.clipboard.writeText(`${system}\n\n---\n\n${user}`); notify('提示词已复制，粘贴给任意模型即可（复制不会联网）。'); }
+      catch { notify('复制失败，请手动选择文本。'); }
+    });
+    box.append(copyPrompt);
+    renderLastReview();
+    return box;
   }
+  box.append(element('p', aiConfig.autoReview ? '自动检查已开：打开公司详情调用一次。只提示，不改字段。' : '点「检查一次」看看有没有漏填或矛盾。只提示，不改字段。', 'hint'));
+  renderLastReview();
   return box;
 }
 
 async function runAiReview(entry, { auto = false } = {}) {
   if (!(aiConfig.apiKey && aiConfig.model)) { notify('请先在「设置」配置模型接口。'); return; }
+  if (!aiConfig.sendConsent) { notify('尚未开启外发授权，未发送任何资料。'); return; }
   aiReviewedThisSession.add(entry.id);
   const box = document.querySelector('#company-detail .ai-box');
   if (box) box.prepend(element('p', 'AI 复核中…', 'hint'));
   try {
-    const result = await requestAiReview(aiConfig, entry, { facts, blocks });
+    const result = await requestAiReview(aiConfig, entry, { facts, blocks, consent: true });
     entry.aiReview = { at: new Date().toISOString(), findings: result.findings };
     await persist();
     if (selectedCompanyId === entry.id) renderCompanyDetail();
@@ -812,7 +845,7 @@ function renderCompanyDetail() {
   actions.append(confirmButton, sheetButton, downloadButton, qaButton, remove);
   pane.append(actions);
 
-  if (aiConfig.autoReview && aiConfig.apiKey && aiConfig.model && !entry.aiReview && !aiReviewedThisSession.has(entry.id)) {
+  if (aiConfig.autoReview && aiConfig.sendConsent && aiConfig.apiKey && aiConfig.model && !entry.aiReview && !aiReviewedThisSession.has(entry.id)) {
     aiReviewedThisSession.add(entry.id);
     setTimeout(() => { void runAiReview(entry, { auto: true }); }, 0);
   }
@@ -881,9 +914,15 @@ function syncAiSettings() {
   $('ai-model').value = aiConfig.model || '';
   $('ai-key').value = aiConfig.apiKey || '';
   $('ai-auto-review').checked = Boolean(aiConfig.autoReview);
+  $('ai-send-consent').checked = Boolean(aiConfig.sendConsent);
   const configured = Boolean(aiConfig.apiKey && aiConfig.model);
-  $('ai-status').textContent = configured ? `已配置${aiConfig.autoReview ? ' · 自动检查开' : ''}` : '未配置';
-  $('ai-status').className = `badge ${configured ? 'ok' : ''}`.trim();
+  $('ai-status').textContent = configured
+    ? `已配置${aiConfig.sendConsent ? ' · 已允许外发' : ' · 未授权外发'}${aiConfig.autoReview ? ' · 自动检查开' : ''}`
+    : '未配置';
+  $('ai-status').className = `badge ${configured && aiConfig.sendConsent ? 'ok' : ''}`.trim();
+  $('ai-consent-note').textContent = configured
+    ? `当前接口：${aiConfig.baseUrl || '未填写'}｜模型：${aiConfig.model}。只发送已确认且非敏感的当前公司资料。`
+    : '填写接口并保存后，才能明确授权外发。未确认和家庭/敏感字段不会发送。';
 }
 
 $('ai-save').addEventListener('click', async () => {
@@ -892,6 +931,7 @@ $('ai-save').addEventListener('click', async () => {
     model: $('ai-model').value,
     apiKey: $('ai-key').value,
     autoReview: $('ai-auto-review').checked,
+    sendConsent: $('ai-send-consent').checked,
   });
   syncAiSettings();
   notify('设置已保存（只存本机）。');

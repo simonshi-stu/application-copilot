@@ -1,92 +1,92 @@
 # Application Copilot
 
-A local-first helper for job applications: turn your resume and company list into copy-ready checklists, so you repeat less and fill fewer fields wrong.
+A job-application workspace for OpenChamber: queue company links, organize your information, choose roles, and handle questions in one place without relying on a long chat history.
 
 [中文](README.md) · [English](README.en.md)
 
-**Live demo:** <https://simonshi-stu.github.io/application-copilot/> (data stays in your browser)
+**The extension is a development build.** The existing [web preparation workspace](https://simonshi-stu.github.io/application-copilot/) remains available, but it is not the full extension and does not operate job sites automatically.
+
+**Extension identity:** the native host for this project is **OpenChamber**, built with OpenChamber SDK 2.3.2. It is not a native OpenCode plugin or a generic Harness plugin. The repository also provides an optional local MCP server for preparation tools in OpenCode and other MCP-compatible clients.
 
 ## 0. Credits
 
-- Layout and interaction ideas were inspired by [Tabler](https://github.com/tabler/tabler) (MIT), [shadcn-admin](https://github.com/satnaing/shadcn-admin) (MIT) and [Job Tracker](https://github.com/Muatasim-Aswad/job-tracker) (MIT). No code or assets were copied.
-- Thanks to these open-source projects and their communities. This project is under the [MIT License](LICENSE).
+- The extension uses the [OpenChamber SDK](https://docs.openchamber.dev/sdk/). Thanks to the OpenChamber and OpenCode communities for their extension and model tooling.
+- The original workspace took layout ideas from [Tabler](https://github.com/tabler/tabler), [shadcn-admin](https://github.com/satnaing/shadcn-admin), and [Job Tracker](https://github.com/Muatasim-Aswad/job-tracker), without copying their branding or assets.
+- This project is [MIT licensed](LICENSE). SDK and build-tool copyrights and licenses are included in [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES).
 
 ## 1. What is it for?
 
-Applying to many companies means typing the same information over and over:
+After a few applications, it is easy to forget which roles you applied for, where you stopped, and what still needs an answer. Resume parsers can also mix a project's description with your own responsibilities.
 
-- Sites often parse resumes badly, losing numbers or turning your work into a project description;
-- Every site orders fields differently, and it is easy to lose track of what you already filled;
-- After a few days you forget which companies you applied to, what stage you are at, and whether a referral code was actually bound.
+Application Copilot brings those tasks together: companies in a queue, structured personal records, roles chosen by you, and ordinary questions collected rather than interrupting every field. Confirmed text is used verbatim, not rewritten during filling.
 
-This tool does not apply for you. It does three things:
-
-1. Splits your resume into facts and paragraphs, which only count after you confirm them;
-2. Turns a company list, referral codes, links and company questions into cards;
-3. Builds a "copy and fill" checklist from confirmed content, and checks for missing items before you submit.
-
-All data stays in your own browser. Nothing is uploaded to a server.
+**Code controls the workflow, and progress lives in local records—not chat history.** The tool helps with preparation and supported filling, but login, CAPTCHA, and final submission remain yours.
 
 ## 2. When and how to use it
 
 For students and interns applying to many roles, or anyone filling the same long forms repeatedly.
 
-1. Import a resume (DOCX or pasted text). It is split into education, internships, projects and so on.
-2. Confirm each field under "我的资料 / My facts" (unconfirmed items never enter the fill checklist).
-3. Paste a company list or referral information. A messy block copied from a group chat works too.
-4. Open a company: check the details, choose a referral code, answer questions specific to that company.
-5. Open "照着填 / Copy & fill": copy each item into the official form and tick it off.
-6. Run "检查一遍 / Check" (optionally let a model review it), then copy or download the checklist.
-7. Submit yourself, then update the stage (to prepare → reviewing → ready → submitted → verified).
+The intended flow:
 
-Login, CAPTCHA and the final submission are always done by you.
+1. Prepare and confirm your records, then queue company links and optional referral codes.
+2. Log in yourself. The assistant finds suitable roles; you choose them and set priorities.
+3. Use supported filling, readback, and review. Ordinary questions appear together.
+4. Answer missing items, review, submit on the official site yourself, and record the result.
+5. Move to the next company once all selected roles are handled, or record a supported reason for skipping it.
+
+Submitted roles, self-reported submissions awaiting official verification, and companies with no suitable roles are separate records. **Filled is not submitted; a failed search is not proof that no roles exist.** Current support is listed below.
 
 ## 3. Current status
 
-Working today:
+| Capability | Current status |
+|---|---|
+| Original web workspace | DOCX/text parsing, paragraph confirmation, verbatim copy, company lists, and local checks are available |
+| Fixed workflow and private records | Code-based state machine, confirmation versions, scoped queries, company/role ledger, and issue queue |
+| Sequential company queue | Completion guards, pause/resume, and duplicate-advance protection; user receipts and official verification stay separate |
+| OpenChamber interface | Panel and service built with SDK 2.3.2; OpenChamber 2.3.2 installation, permission approval, fictional enqueue, and close/reopen persistence have been verified |
+| Role models | Separate search, execution, and review settings; saving a selection does not mean a model has run |
+| Job-site filling | Moka is the first target; no complete real-site application flow has been verified, and arbitrary-site support is not promised |
 
-- **Resume:** local DOCX/text import, section parsing, block-by-block confirmation, verbatim copy;
-- **Facts:** source labels (manual/resume), per-item confirmation, export;
-- **Companies:** paste parsing (numbered, titled, plain-name lists, links), industry suggestions, referral candidates, per-company questions;
-- **Filling:** copy-and-fill checklist, stage and timeline, notes and job ID, local checks, checklist copy/download, optional AI check;
-- **MCP:** a local tool server (parsing, field cards, fill plans, checks).
+This is not an unattended mass-application service. Without real page readback and a valid review result, it must not report that a website check passed.
 
-Not built yet:
+## 4. Demo and preview
 
-- Automatic form filling on job sites (needs site permissions and real-page testing);
-- Application quota tracking and application-level deduplication;
-- A deeper visual/brand pass.
+### Online preview: web preparation workspace
 
-## 4. How to use it
+Open the [online preparation workspace](https://simonshi-stu.github.io/application-copilot/) to see record organization, paragraph confirmation, and manual-copy flows. This is a static web demo; it does not include the OpenChamber panel, local service, or job-site automation.
 
-### Try it online
+### Full extension preview: local OpenChamber
 
-<https://simonshi-stu.github.io/application-copilot/>
+The full “投递任务池” panel must be installed in OpenChamber 2.3.2+ because it depends on the host extension panel and local-service bridge. See the next section for installation. The OpenChamber panel cannot be represented as a GitHub Pages page because it requires local host permissions.
 
-### Run locally
+## 5. How to use it
 
-Requires Node.js 22+:
+### Recommended: install in OpenChamber
+
+The extension targets OpenChamber **2.3.2 or newer**, using verified interfaces from the matching SDK. In **Settings → Extensions**, add the extension ZIP or this repository's root folder, review its local-service permissions, and open **投递任务池 / Application queue**. Do not select the old `extension/` subfolder.
+
+Preparing it from source requires Node.js 22+:
 
 ```text
-npm run serve
+npm ci
+npm run build:openchamber
+npm run package:openchamber
 ```
 
-Open <http://127.0.0.1:4173/extension/editor.html>.
+The package is `artifacts/application-copilot-openchamber-v0.5.0.zip`. Its unpacked service passed authenticated health checks, and OpenChamber 2.3.2 installation, authorization, and fictional enqueue persistence have also been verified; this does not verify a real job-site flow. Do not install an incomplete package after a failed build or safety check. Git-URL installation also requires a version with complete prebuilt files. For public distribution, attach the ZIP to a GitHub Release rather than committing `private/` or `artifacts/`. OpenChamber starts the service when needed; **you do not need to launch a localhost preview yourself**.
 
-### Use as a browser extension
+### Use the original web or Chrome extension
 
-In Chrome or Edge, open `chrome://extensions`, enable Developer mode, choose "Load unpacked", and select the `extension` folder.
+Open the [web workspace](https://simonshi-stu.github.io/application-copilot/), or load the `extension/` folder from Chrome/Edge's extension manager. These are for preparation and manual copying; they do not gain the new extension's site-execution abilities merely by being opened.
 
-### Optional: MCP
+### Data and models
 
-Run `npm run mcp`. Client configuration is in [docs/MCP.md](docs/MCP.md).
+- Extension records belong in the current project's private directory. Existing web data stays in browser storage and is not migrated automatically. Back it up before changing devices.
+- Personal and family information, resume/project text, attachments, logs, and keys must not enter GitHub or distributed packages. Family fields are used only when actually required and authorized.
+- Cloud models receive authorized, necessary information. Keeping data out of GitHub is not the same as keeping it out of a model provider. Do not paste keys into chat.
+- The host-managed service runs with your system-user privileges. A remote OpenChamber instance may store data on the remote machine, not your computer.
 
-### Notes
-
-- Data lives in browser storage. Export before switching computers or clearing site data.
-- AI checks use your own model key, stored locally only. Hosted pages may hit CORS limits.
-- No login, CAPTCHA or final submission on your behalf. Read the [usage statement](docs/USAGE.md) first.
-- Deployment options: [docs/DEPLOY.md](docs/DEPLOY.md).
+More: [OpenChamber usage](docs/OPENCHAMBER.md) · [Usage statement](docs/USAGE.md) · [Deployment](docs/DEPLOY.md) · [Optional MCP](docs/MCP.md). Supporting documents are currently in Chinese.
 
 ## License
 

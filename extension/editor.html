@@ -128,7 +128,9 @@
             <label>模型名<input id="ai-model" type="text" placeholder="如 gpt-4o-mini / deepseek-chat"></label>
             <label>API Key<input id="ai-key" type="password" placeholder="sk-..."></label>
             <label class="inline"><input id="ai-auto-review" type="checkbox"> 打开公司详情时自动检查一次（会产生费用）</label>
+            <label class="inline"><input id="ai-send-consent" type="checkbox"> 我已阅读发送范围，明确允许把当前公司、已选内推和已确认且非敏感的字段/原文发送到上述接口；不发送未确认、家庭/敏感字段与备注</label>
           </div>
+          <p id="ai-consent-note" class="hint">未确认和家庭/敏感字段不会发送。授权只影响本机这一接口配置。</p>
           <div class="actions">
             <button id="ai-save" type="button">保存</button>
             <button id="ai-clear" class="danger" type="button">清除 Key</button>

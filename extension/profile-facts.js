@@ -1,6 +1,10 @@
 // 资料库字段：本机个人信息列表，逐项确认。
 // 只有「已确认」的字段才会进入公司信息卡的「已确认可复用」；解析导入一律为「待确认」。
 
+function nextVersion(fact) {
+  return Number.isInteger(fact?.version) && fact.version > 0 ? fact.version + 1 : 2;
+}
+
 export function makeFact(label = '', value = '', status = 'unconfirmed', source = 'manual') {
   return {
     id: crypto.randomUUID(),
@@ -8,7 +12,34 @@ export function makeFact(label = '', value = '', status = 'unconfirmed', source 
     value: String(value),
     status: status === 'confirmed' ? 'confirmed' : 'unconfirmed',
     source: source === 'resume' ? 'resume' : 'manual',
+    version: 1,
+    confirmedAt: status === 'confirmed' ? new Date().toISOString() : null,
     updatedAt: new Date().toISOString(),
+  };
+}
+
+// 修改内容即撤销人工确认；旧确认依据不再适用于新值。
+export function reviseFact(fact, patch = {}) {
+  const now = new Date().toISOString();
+  return {
+    ...fact,
+    ...patch,
+    id: fact.id,
+    status: 'unconfirmed',
+    confirmedAt: null,
+    version: nextVersion(fact),
+    updatedAt: now,
+  };
+}
+
+// 人工确认只对当前版本有效；再次编辑会使该确认失效。
+export function confirmFact(fact) {
+  const now = new Date().toISOString();
+  return {
+    ...fact,
+    status: 'confirmed',
+    confirmedAt: now,
+    updatedAt: now,
   };
 }
 
@@ -22,6 +53,8 @@ export function validateFacts(raw) {
       value: typeof item.value === 'string' ? item.value : '',
       status: item.status === 'confirmed' ? 'confirmed' : 'unconfirmed',
       source: item.source === 'resume' ? 'resume' : 'manual',
+      version: Number.isInteger(item.version) && item.version > 0 ? item.version : 1,
+      confirmedAt: typeof item.confirmedAt === 'string' ? item.confirmedAt : null,
       updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : '',
     }));
 }

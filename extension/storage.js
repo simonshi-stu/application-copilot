@@ -14,20 +14,42 @@ export const KEYS = {
   facts: 'applicationCopilot.profileFacts.v1',
 };
 
+// 旧版本曾用短键（blocks/profile/...）写入 chrome.storage。读取时作为兼容回退，
+// 新写入一律使用 KEYS 中的完整键；旧键保留不删除，避免破坏未知数据。
+export const LEGACY_KEYS = Object.freeze({
+  blocks: 'blocks',
+  profile: 'profile',
+  companies: 'companies',
+  aliases: 'aliases',
+  companiesUnknown: 'companiesUnknown',
+  facts: 'facts',
+});
+
+const KEY_ENTRIES = Object.entries(KEYS);
+
 let queue = Promise.resolve();
 
-async function readKey(key) {
-  if (extensionStorage) return (await extensionStorage.get(key))[key];
-  const raw = localStorage.getItem(key);
-  if (raw === null) return undefined;
-  return JSON.parse(raw);
+function storedValue(result, key) {
+  return Object.hasOwn(result, key) ? result[key] : undefined;
+}
+
+async function readPair(name) {
+  const key = KEYS[name];
+  const legacy = LEGACY_KEYS[name];
+  if (extensionStorage) {
+    const result = await extensionStorage.get([key, legacy]);
+    const value = storedValue(result, key);
+    return value !== undefined ? value : storedValue(result, legacy);
+  }
+  const current = localStorage.getItem(key);
+  if (current !== null) return JSON.parse(current);
+  const old = localStorage.getItem(legacy);
+  return old === null ? undefined : JSON.parse(old);
 }
 
 export async function loadAll() {
-  const [blocks, profile, companies, aliases, companiesUnknown, facts] = await Promise.all(
-    Object.values(KEYS).map(readKey),
-  );
-  return { blocks, profile, companies, aliases, companiesUnknown, facts };
+  const values = await Promise.all(KEY_ENTRIES.map(([name]) => readPair(name)));
+  return Object.fromEntries(KEY_ENTRIES.map(([name], index) => [name, values[index]]));
 }
 
 export function saveAll(data = {}) {
@@ -40,10 +62,12 @@ export function saveAll(data = {}) {
     facts: data.facts ?? [],
   });
   const write = queue.then(async () => {
-    if (extensionStorage) await extensionStorage.set(snapshot);
-    else {
-      for (const [name, value] of Object.entries(snapshot)) {
-        localStorage.setItem(KEYS[name], JSON.stringify(value));
+    if (extensionStorage) {
+      const payload = Object.fromEntries(KEY_ENTRIES.map(([name, key]) => [key, snapshot[name]]));
+      await extensionStorage.set(payload);
+    } else {
+      for (const [name, key] of KEY_ENTRIES) {
+        localStorage.setItem(key, JSON.stringify(snapshot[name]));
       }
     }
   });
