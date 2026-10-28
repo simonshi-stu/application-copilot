@@ -283,6 +283,18 @@ export const TOOL_DEFINITIONS = Object.freeze([
     run: (service, input, context) => service.resumeQueue(context),
   },
   {
+    name: 'prioritize_company',
+    access: 'operator',
+    description: '本人调整尚未开始公司的顺序；运行中的队列不能重排。',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['companyId'],
+      properties: { companyId: id },
+    },
+    run: (service, input, context) => service.prioritizeCompany(input, context),
+  },
+  {
     name: 'hold_company',
     access: 'operator',
     description: '本人明确暂挂当前公司并继续下一家；暂挂不等于完成。',

@@ -13,6 +13,8 @@ import {
   buildCapabilitiesRequest,
   buildCommandPayload,
   buildCommandRequest,
+  buildSessionInboxAckRequest,
+  buildSessionInboxRequest,
   buildStateRequest,
   countUnresolvedIssues,
   describeCompanyApplication,
@@ -22,6 +24,8 @@ import {
   normalizeState,
   parseCapabilitiesResponse,
   parseCommandResponse,
+  parseSessionInboxAckResponse,
+  parseSessionInboxResponse,
   parseStateResponse,
   statusMeta,
 } from './contract.js';
@@ -87,6 +91,43 @@ test('command envelope has only the contracted fields', () => {
   assert.equal(request.method, 'POST');
   assert.equal(request.path, '/api/command');
   assert.equal(JSON.parse(request.body).expectedRevision, 3);
+});
+
+test('session inbox requests preserve message text and validate acknowledgements', () => {
+  assert.deepEqual(buildSessionInboxRequest('E:/demo/project'), {
+    method: 'GET',
+    path: '/api/session-inbox',
+    query: { directory: 'E:/demo/project' },
+  });
+  const ack = buildSessionInboxAckRequest('E:/demo/project', ['message-1']);
+  assert.equal(ack.method, 'POST');
+  assert.equal(ack.path, '/api/session-inbox/ack');
+  assert.deepEqual(JSON.parse(ack.body), {
+    directory: 'E:/demo/project',
+    messageIds: ['message-1'],
+  });
+  assert.throws(
+    () => buildSessionInboxAckRequest('E:/demo/project', ['message-1', 'message-1']),
+    error => error.code === 'INVALID_SESSION_MESSAGE_IDS',
+  );
+  const response = parseSessionInboxResponse({
+    status: 200,
+    body: JSON.stringify({
+      ok: true,
+      messages: [{
+        id: 'message-1',
+        text: '  保留原文  ',
+        createdAt: '2026-10-28T00:00:00.000Z',
+        targetSessionId: 'ses_virtual_test',
+      }],
+    }),
+  });
+  assert.deepEqual(response.messages[0].text, '  保留原文  ');
+  assert.equal(response.messages[0].targetSessionId, 'ses_virtual_test');
+  assert.deepEqual(
+    parseSessionInboxAckResponse({ status: 200, body: JSON.stringify({ ok: true, acknowledged: 1 }) }),
+    { acknowledged: 1 },
+  );
 });
 
 test('enqueue accepts http(s) only and does not select a referral code', () => {

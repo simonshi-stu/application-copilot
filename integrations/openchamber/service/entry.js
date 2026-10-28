@@ -31,6 +31,12 @@ import {
   createMokaWorkflow,
   createMemoryCredentialStore,
 } from './moka-workflow.js';
+import {
+  acknowledgeSessionMessages,
+  appendSessionMessage,
+  readSessionInbox,
+  SessionInboxError,
+} from '../session-bridge.js';
 
 const API_VERSION = 1;
 const SERVICE_BACKEND = 'application-copilot-local-service';
@@ -94,6 +100,11 @@ class ServiceError extends Error {
 
 function serviceError(status, code, message, details) {
   return new ServiceError(status, code, message, details);
+}
+
+function sessionInboxServiceError(error, fallbackStatus) {
+  const status = error.code === 'SESSION_INBOX_BUSY' ? 409 : fallbackStatus;
+  return serviceError(status, error.code, error.message);
 }
 
 function isPlainObject(value) {
@@ -1193,6 +1204,11 @@ function normalizeResume(input) {
   return {};
 }
 
+function normalizePrioritizeCompany(input) {
+  assertOnlyKeys(input, ['companyId']);
+  return { companyId: requireString(input.companyId, '公司 ID', { max: 128 }) };
+}
+
 async function runResume(ctx, input, deps) {
   const result = await deps.invoke(ctx, 'resume_queue', {});
   return {
@@ -1201,6 +1217,21 @@ async function runResume(ctx, input, deps) {
       currentCompanyId: result.currentCompanyId || null,
       idempotent: result.idempotent === true,
       note: '恢复只依据持久化状态；不重放页面填写、上传或提交。',
+    },
+    changed: result.idempotent !== true,
+  };
+}
+
+async function runPrioritizeCompany(ctx, input, deps) {
+  const result = await deps.invoke(ctx, 'prioritize_company', {
+    companyId: input.companyId,
+  });
+  return {
+    result: {
+      company: result.company,
+      queue: result.queue,
+      idempotent: result.idempotent === true,
+      note: '已把该公司调整为下一家待处理任务；不会自动登录、填写或提交。',
     },
     changed: result.idempotent !== true,
   };
@@ -2011,6 +2042,7 @@ defineCommand('user.enqueue', 'enqueue', normalizeEnqueue, runEnqueue);
 defineCommand('user.start', 'start', normalizeStart, runStart);
 defineCommand('user.pause', 'pause', normalizePause, runPause);
 defineCommand('user.resume', 'resume', normalizeResume, runResume);
+defineCommand('user.prioritizeCompany', 'prioritizeCompany', normalizePrioritizeCompany, runPrioritizeCompany);
 defineCommand('user.confirmLogin', 'confirmLogin', normalizeConfirmLogin, runConfirmLogin);
 defineCommand('user.selectJobs', 'selectJobs', normalizeSelectJobs, runSelectJobs);
 defineCommand('user.reportSubmitted', 'reportSubmitted', normalizeReportSubmitted, runReportSubmitted);
@@ -2359,6 +2391,52 @@ export function createServiceServer(options = {}) {
     });
   }
 
+  async function getSessionInbox(directory) {
+    const ctx = await getContext(directory);
+    return enqueueProjectTask(ctx, async () => {
+      try {
+        await validateProjectLayout(ctx.projectPath, { create: false });
+        return await readSessionInbox(ctx.appRoot);
+      } catch (error) {
+        if (error instanceof SessionInboxError) {
+          throw sessionInboxServiceError(error, 500);
+        }
+        throw error;
+      }
+    });
+  }
+
+  async function appendSessionInbox(directory, text, targetSessionId = null) {
+    const ctx = await getContext(directory);
+    return enqueueProjectTask(ctx, async () => {
+      try {
+        await validateProjectLayout(ctx.projectPath, { create: true });
+        const message = await appendSessionMessage(ctx.appRoot, text, { now, newId, targetSessionId });
+        return { message };
+      } catch (error) {
+        if (error instanceof SessionInboxError) {
+          throw sessionInboxServiceError(error, 400);
+        }
+        throw error;
+      }
+    });
+  }
+
+  async function acknowledgeSessionInbox(directory, messageIds) {
+    const ctx = await getContext(directory);
+    return enqueueProjectTask(ctx, async () => {
+      try {
+        await validateProjectLayout(ctx.projectPath, { create: true });
+        return await acknowledgeSessionMessages(ctx.appRoot, messageIds);
+      } catch (error) {
+        if (error instanceof SessionInboxError) {
+          throw sessionInboxServiceError(error, 400);
+        }
+        throw error;
+      }
+    });
+  }
+
   async function runCommand(envelope) {
     const info = mapCommand(envelope.command);
     if (!info) {
@@ -2426,6 +2504,47 @@ export function createServiceServer(options = {}) {
         assertNoQuery(url);
         assertNoBody(req);
         sendJson(res, 200, { ok: true, capabilities: buildCapabilities() });
+        return;
+      }
+
+      if (pathname === '/api/session-inbox') {
+        if (req.method === 'GET') {
+          assertNoBody(req);
+          const keys = [...url.searchParams.keys()];
+          if (keys.length !== 1 || keys[0] !== 'directory') {
+            throw serviceError(400, 'UNKNOWN_QUERY', 'session-inbox 接口只接受一个 directory 查询参数。');
+          }
+          const directory = url.searchParams.get('directory');
+          if (!directory) throw serviceError(400, 'INVALID_DIRECTORY', '缺少 directory 查询参数。');
+          const messages = await getSessionInbox(directory);
+          sendJson(res, 200, { ok: true, messages });
+          return;
+        }
+        if (req.method === 'POST') {
+          assertNoQuery(url);
+          const body = await readJsonBody(req);
+        assertOnlyKeys(body, ['directory', 'text', 'targetSessionId'], '请求体');
+        const directory = requireString(body.directory, 'directory', { max: MAX_DIRECTORY_LENGTH });
+        const text = requireString(body.text, 'text', { max: 16000, preserve: true });
+        const targetSessionId = optionalString(body.targetSessionId, 'targetSessionId', { max: 128 });
+        const result = await appendSessionInbox(directory, text, targetSessionId || null);
+          sendJson(res, 200, { ok: true, ...result });
+          return;
+        }
+        throw serviceError(405, 'METHOD_NOT_ALLOWED', 'session-inbox 接口只接受 GET 或 POST。');
+      }
+
+      if (pathname === '/api/session-inbox/ack') {
+        assertMethod(req, 'POST');
+        assertNoQuery(url);
+        const body = await readJsonBody(req);
+        assertOnlyKeys(body, ['directory', 'messageIds'], '请求体');
+        const directory = requireString(body.directory, 'directory', { max: MAX_DIRECTORY_LENGTH });
+        if (!Array.isArray(body.messageIds)) {
+          throw serviceError(400, 'INVALID_SESSION_MESSAGE_IDS', 'messageIds 必须是数组。');
+        }
+        const result = await acknowledgeSessionInbox(directory, body.messageIds);
+        sendJson(res, 200, { ok: true, ...result });
         return;
       }
 

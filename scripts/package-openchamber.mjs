@@ -19,10 +19,14 @@ export const RUNTIME_FILES = Object.freeze([
   'integrations/openchamber/panel/index.html',
   'integrations/openchamber/panel/main.js',
   'integrations/openchamber/panel/styles.css',
+  'integrations/openchamber/hud/index.html',
+  'integrations/openchamber/hud/main.js',
+  'integrations/openchamber/hud/styles.css',
 ]);
 
 export const SERVICE_ENTRY = 'integrations/openchamber/service/main.js';
 export const PANEL_ENTRY = 'integrations/openchamber/panel/index.html';
+export const HUD_ENTRY = 'integrations/openchamber/hud/index.html';
 export const OPENCHAMBER_HOST_RANGE = '>=2.3.2';
 
 const FORBIDDEN_PREFIXES = Object.freeze([
@@ -166,11 +170,11 @@ function validateLeastPrivilege(manifest) {
     );
   }
   const requested = requestedGuestCapabilities(contributes);
-  const unexpected = requested.filter((capability) => capability !== 'service');
+  const unexpected = requested.filter((capability) => !['prompt', 'service', 'sessions'].includes(capability));
   if (unexpected.length > 0) {
     throw new PublicationError(
       'OVERPRIVILEGED_CAPABILITIES',
-      `发布包声明了未批准能力：${unexpected.join(', ')}。只允许 service。`,
+      `发布包声明了未批准能力：${unexpected.join(', ')}。只允许 prompt、sessions 和 service。`,
     );
   }
   if (contributes.filesystem || contributes.origins || contributes.integration) {
@@ -189,6 +193,17 @@ function validateLeastPrivilege(manifest) {
     throw new PublicationError(
       'SERVICE_ENTRY_MISMATCH',
       `service.entry 必须是 ${SERVICE_ENTRY}。`,
+    );
+  }
+  if (
+    !contributes.attach ||
+    typeof contributes.attach !== 'object' ||
+    contributes.attach.mode !== 'dialog' ||
+    contributes.attach.entry !== HUD_ENTRY
+  ) {
+    throw new PublicationError(
+      'HUD_ENTRY_MISMATCH',
+      `attach 必须声明 dialog HUD：${HUD_ENTRY}。`,
     );
   }
 }
@@ -226,26 +241,42 @@ export async function fileInfo(rootDir, relativePath) {
 }
 
 async function validatePanelIndex(rootDir) {
-  const info = await fileInfo(rootDir, PANEL_ENTRY);
+  return validateGuestIndex(rootDir, PANEL_ENTRY, 'panel');
+}
+
+async function validateHudIndex(rootDir) {
+  return validateGuestIndex(rootDir, HUD_ENTRY, 'HUD');
+}
+
+async function validateGuestIndex(rootDir, entry, label) {
+  const info = await fileInfo(rootDir, entry);
   const html = await readFile(info.absolute, 'utf8');
   if (!/<script[^>]+src=["']\.\/main\.js["'][^>]*>\s*<\/script>/i.test(html)) {
-    throw new PublicationError('PANEL_SCRIPT_MISSING', 'panel/index.html 未加载 ./main.js。');
+    throw new PublicationError(`${label.toUpperCase()}_SCRIPT_MISSING`, `${entry} 未加载 ./main.js。`);
   }
   if (/<script(?![^>]*\bsrc=)[^>]*>/i.test(html)) {
-    throw new PublicationError('PANEL_INLINE_SCRIPT', 'panel/index.html 不得包含内联脚本。');
+    throw new PublicationError(`${label.toUpperCase()}_INLINE_SCRIPT`, `${entry} 不得包含内联脚本。`);
   }
   if (/(?:src|href)=["']https?:/i.test(html)) {
-    throw new PublicationError('REMOTE_ASSET', 'panel/index.html 不得引用远程脚本、样式或资源。');
+    throw new PublicationError('REMOTE_ASSET', `${entry} 不得引用远程脚本、样式或资源。`);
   }
   return html;
 }
 
 async function validatePanelBundle(rootDir) {
-  const info = await fileInfo(rootDir, 'integrations/openchamber/panel/main.js');
+  return validateGuestBundle(rootDir, 'integrations/openchamber/panel/main.js', 'panel');
+}
+
+async function validateHudBundle(rootDir) {
+  return validateGuestBundle(rootDir, 'integrations/openchamber/hud/main.js', 'HUD');
+}
+
+async function validateGuestBundle(rootDir, entry, label) {
+  const info = await fileInfo(rootDir, entry);
   const text = await readFile(info.absolute, 'utf8');
   verifyPanelBundle(text);
   if (/localStorage\s*\./.test(text)) {
-    throw new PublicationError('LOCAL_STORAGE_DEMO', '面板 bundle 不得以 localStorage 模拟任务状态。');
+    throw new PublicationError('LOCAL_STORAGE_DEMO', `${label} bundle 不得以 localStorage 模拟任务状态。`);
   }
   return text;
 }
@@ -401,6 +432,8 @@ export async function checkPublication({ rootDir = ROOT } = {}) {
   try {
     await validatePanelIndex(rootDir);
     await validatePanelBundle(rootDir);
+    await validateHudIndex(rootDir);
+    await validateHudBundle(rootDir);
     await validateThirdPartyNotices(rootDir, plan.packageJson);
     const serviceEntry = plan.manifest.openchamber.contributes.service.entry;
     const serviceInfo = await stat(resolve(rootDir, serviceEntry));

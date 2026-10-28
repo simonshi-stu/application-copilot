@@ -36,6 +36,11 @@ function fixtureManifest(version = '9.9.9') {
           icon: 'window',
           entry: 'integrations/openchamber/panel/index.html',
         },
+        attach: {
+          mode: 'dialog',
+          entry: 'integrations/openchamber/hud/index.html',
+        },
+        capabilities: ['prompt'],
         page: true,
         service: {
           entry: 'integrations/openchamber/service/main.js',
@@ -76,6 +81,10 @@ async function createFixture({ service = true, decoys = true } = {}) {
       '<!doctype html><html><body><div id="app"></div><script src="./main.js"></script></body></html>\n',
     'integrations/openchamber/panel/main.js': fakeBundle(),
     'integrations/openchamber/panel/styles.css': 'body { margin: 0; }\n',
+    'integrations/openchamber/hud/index.html':
+      '<!doctype html><html><body><div id="app"></div><script src="./main.js"></script></body></html>\n',
+    'integrations/openchamber/hud/main.js': fakeBundle(),
+    'integrations/openchamber/hud/styles.css': 'body { margin: 0; }\n',
     'integrations/openchamber/service/main.js': fakeServiceBundle(),
   };
   if (service) {
@@ -180,6 +189,9 @@ test('complete fixture builds a deterministic whitelist zip with a sanitized man
       'integrations/openchamber/panel/index.html',
       'integrations/openchamber/panel/main.js',
       'integrations/openchamber/panel/styles.css',
+      'integrations/openchamber/hud/index.html',
+      'integrations/openchamber/hud/main.js',
+      'integrations/openchamber/hud/styles.css',
       'integrations/openchamber/service/main.js',
       'package.json',
     ].sort(),
@@ -196,6 +208,10 @@ test('complete fixture builds a deterministic whitelist zip with a sanitized man
   assert.equal(packaged.private, undefined);
   assert.equal(packaged.type, 'module');
   assert.equal(packaged.openchamber.contributes.panel.entry, 'integrations/openchamber/panel/index.html');
+  assert.deepEqual(packaged.openchamber.contributes.attach, {
+    mode: 'dialog',
+    entry: 'integrations/openchamber/hud/index.html',
+  });
   assert.equal(
     packaged.openchamber.contributes.service.entry,
     'integrations/openchamber/service/main.js',
@@ -204,7 +220,7 @@ test('complete fixture builds a deterministic whitelist zip with a sanitized man
     packaged.openchamber.contributes.service.runtime,
     'host',
   );
-  assert.equal(packaged.openchamber.contributes.capabilities, undefined);
+  assert.deepEqual(packaged.openchamber.contributes.capabilities, ['prompt']);
   assert.equal(zip.get('THIRD_PARTY_NOTICES').toString('utf8').includes('Evan Wallace'), true);
 });
 

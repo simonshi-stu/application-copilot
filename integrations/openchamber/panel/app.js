@@ -1075,21 +1075,34 @@ function start() {
   function renderQueueControls() {
     el.queueControls.replaceChildren();
     const queueState = state.workbench?.queue.state ?? 'unknown';
-    const hasCompanies = (state.workbench?.companies ?? []).length > 0;
+    const companies = state.workbench?.companies ?? [];
+    const hasCompanies = companies.length > 0;
     const ready = isReadyForCommands();
+    const activeCompany = companies.find((company) => company.id === state.workbench?.queue.activeCompanyId);
+    const paused = queueState === 'paused';
+    const awaitingLogin = queueState === 'running' && activeCompany?.status === 'awaiting_login';
 
-    const start = actionButton('开始队列', 'primary', () => {
-      void runCommand(COMMAND.start, {}, { successMessage: '队列已开始；登录和最终提交仍需本人完成。' });
-    });
+    const start = actionButton(
+      paused ? '已暂停' : awaitingLogin ? '队列已运行' : '开始队列',
+      'primary',
+      () => {
+        void runCommand(COMMAND.start, {}, { successMessage: '队列已开始；登录和最终提交仍需本人完成。' });
+      },
+    );
     start.disabled = !ready || !hasCompanies || !['idle', 'completed'].includes(queueState);
+    start.title = paused
+      ? '队列已暂停，请点击“恢复队列”继续。'
+      : awaitingLogin
+        ? '队列已经运行，请本人登录后记录“我已登录”。'
+        : '';
 
     const pause = actionButton('暂停', 'outline', () => {
       void runCommand(COMMAND.pause, {}, { successMessage: '已请求暂停；不会自动把任务标记为完成。' });
     });
     pause.disabled = !ready || !['running', 'blocked'].includes(queueState);
 
-    const resume = actionButton('恢复', 'outline', () => {
-      void runCommand(COMMAND.resume, {}, { successMessage: '已请求恢复；会从持久化状态继续。' });
+    const resume = actionButton(paused ? '恢复队列' : '恢复', paused ? 'primary' : 'outline', () => {
+      void runCommand(COMMAND.resume, {}, { successMessage: '队列已恢复；请按当前公司阶段继续。' });
     });
     resume.disabled = !ready || queueState !== 'paused';
 
@@ -3438,6 +3451,14 @@ function start() {
       QUEUE_NOT_RUNNING: [
         '队列未运行',
         '当前阶段操作需要队列运行；请先恢复队列。',
+      ],
+      QUEUE_PAUSED: [
+        '队列已暂停',
+        '请点击“恢复队列”，不要重新启动队列。',
+      ],
+      QUEUE_ALREADY_RUNNING: [
+        '队列已经运行',
+        '请先本人登录并记录“我已登录”回执。',
       ],
       NOT_AWAITING_LOGIN: [
         '当前不在待登录阶段',

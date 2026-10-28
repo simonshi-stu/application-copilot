@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
+  buildOpenChamberHud,
   buildOpenChamberPanel,
   buildOpenChamberService,
   verifyPanelBundle,
@@ -19,10 +20,15 @@ test('OpenChamber manifest pins the SDK and host versions', async () => {
   assert.equal(packageJson.type, 'module');
 });
 
-test('builds a classic panel IIFE and one self-contained service ESM', async () => {
+test('builds classic panel and HUD IIFEs plus one self-contained service ESM', async () => {
   const panel = await buildOpenChamberPanel();
   assert.match(panel.text.trimStart(), /^\/\*![\s\S]*?\*\/\s*\(/);
   verifyPanelBundle(panel.text);
+
+  const hud = await buildOpenChamberHud();
+  assert.match(hud.text.trimStart(), /^\/\*![\s\S]*?\*\/\s*\(/);
+  verifyPanelBundle(hud.text);
+  assert.match(hud.text, /onSessionLifecycle|prompt/);
 
   const service = await buildOpenChamberService();
   verifyServiceBundle(service.text);

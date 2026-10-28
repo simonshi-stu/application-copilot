@@ -1,6 +1,7 @@
 {
   "name": "application-copilot",
-  "version": "0.5.0",
+  "version": "0.5.1",
+  "description": "Standalone Windows HUD and OpenChamber extension bridge for Application Copilot.",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -14,6 +15,20 @@
         "icon": "briefcase-line",
         "entry": "integrations/openchamber/panel/index.html"
       },
+      "attach": {
+        "mode": "dialog",
+        "entry": "integrations/openchamber/hud/index.html"
+      },
+      "actions": [
+        {
+          "id": "open-hud",
+          "label": "投递 HUD",
+          "icon": "layout-grid-line",
+          "where": "session",
+          "mode": "open"
+        }
+      ],
+      "capabilities": ["prompt", "sessions"],
       "page": true,
       "service": {
         "entry": "integrations/openchamber/service/main.js",
@@ -28,6 +43,7 @@
     "mcp": "node mcp/server.mjs",
     "build:openchamber": "node scripts/build-openchamber.mjs",
     "package:openchamber": "node scripts/build-openchamber.mjs && node scripts/package-openchamber.mjs",
+    "standalone:hud": "node scripts/standalone-hud.mjs",
     "check:publication": "node scripts/check-publication.mjs"
   },
   "devDependencies": {

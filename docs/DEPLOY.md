@@ -6,7 +6,7 @@
 
 ## 方式一：GitHub Pages（已启用）
 
-当前已部署：<https://simonshi-stu.github.io/application-copilot/>。仓库已公开，Pages 使用 GitHub Actions 发布 `extension/`，入口 `index.html` 自动跳转到 `editor.html`。
+当前已部署：<https://simonshi-stu.github.io/openchamber-application-hud/>。仓库已公开，Pages 使用 GitHub Actions 发布 `extension/`，入口 `index.html` 自动跳转到 `editor.html`。该页面只是原有资料工作台，不是 Windows HUD，也不是完整 OpenChamber 扩展。
 
 若日后改为私有仓库：私有仓库需要付费计划才支持 Pages；否则可改用方式二。
 
@@ -44,7 +44,7 @@ jobs:
 ```
 
 3. Settings → Pages → Build and deployment → Source 选择 **GitHub Actions**，然后推送触发部署。
-4. 访问 `https://<用户名>.github.io/application-copilot/`（`index.html` 会跳转到 `editor.html`）。
+4. 访问 `https://<用户名>.github.io/openchamber-application-hud/`（`index.html` 会跳转到 `editor.html`）。
 
 ## 方式二：Vercel / Netlify / Cloudflare Pages（可保持仓库私有）
 

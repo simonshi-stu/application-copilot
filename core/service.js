@@ -38,7 +38,7 @@ import {
   submissionSchema,
   verificationSchema,
 } from './records.js';
-import { createQueue, nextQueuedCompany, queueSchema } from './queue.js';
+import { createQueue, nextQueuedCompany, prioritizeQueuedCompany, queueSchema } from './queue.js';
 import {
   ISSUE_STATUSES,
   ISSUE_TYPES,
@@ -646,6 +646,26 @@ export function createWorkbenchService({
         return { queue: clone(local.queue), currentCompanyId: local.queue.currentCompanyId };
       });
     });
+  }
+
+  async function prioritizeCompany(input, context) {
+    assertOperator(context, 'prioritizeCompany');
+    const companyId = input?.companyId;
+    return serial(() => mutate({ type: 'prioritize_company', companyId }, local => {
+      if (![QUEUE_STATUS.IDLE, QUEUE_STATUS.PAUSED].includes(local.queue.status)) {
+        throw new WorkflowError('QUEUE_NOT_REORDERABLE', '只有未开始或已暂停的队列可以调整公司优先级。');
+      }
+      const company = findCompany(companyId);
+      if (company.status !== COMPANY_STATUS.QUEUED) {
+        throw new WorkflowError('COMPANY_NOT_QUEUED', '只有尚未开始的公司可以调整优先级。');
+      }
+      const changed = prioritizeQueuedCompany(local.companies, company.id);
+      return {
+        company: clone(company),
+        queue: clone(local.queue),
+        idempotent: !changed,
+      };
+    }));
   }
 
   async function holdCompany(input, context) {
@@ -1317,6 +1337,7 @@ export function createWorkbenchService({
     startQueue,
     pauseQueue,
     resumeQueue,
+    prioritizeCompany,
     holdCompany,
     resumeHeldCompany,
     selectPositions,

@@ -15,6 +15,42 @@ test('没有明确 private 目录时不创建工作区', () => {
   assert.throws(() => createWorkbenchService(), error => error.code === 'PRIVATE_DIR_REQUIRED');
 });
 
+test('本人可以在队列开始前或暂停时把尚未开始的公司置为下一家', async t => {
+  const { dir, service } = makeService();
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+
+  const companies = [];
+  for (const name of ['示例甲公司', '示例乙公司', '示例丙公司']) {
+    companies.push(await service.addCompany({
+      name,
+      links: [{ url: `https://${name}.example.invalid/jobs`, kind: 'apply', source: '虚构测试' }],
+    }, operator));
+  }
+
+  await service.prioritizeCompany({ companyId: companies[2].company.id }, operator);
+  let summary = await service.summary();
+  assert.deepEqual(summary.companies.map(company => company.name).sort((left, right) => {
+    const a = summary.companies.find(item => item.name === left).queueOrder;
+    const b = summary.companies.find(item => item.name === right).queueOrder;
+    return a - b;
+  }), ['示例丙公司', '示例甲公司', '示例乙公司']);
+
+  await service.startQueue({ eventId: 'priority-start', confirmedBy: 'user' }, operator);
+  assert.equal((await service.summary()).currentCompany.name, '示例丙公司');
+  await assert.rejects(
+    service.prioritizeCompany({ companyId: companies[0].company.id }, operator),
+    error => error.code === 'QUEUE_NOT_REORDERABLE',
+  );
+  await service.pauseQueue(operator);
+  await service.prioritizeCompany({ companyId: companies[1].company.id }, operator);
+  summary = await service.summary();
+  const queued = summary.companies
+    .filter(company => company.status === 'queued')
+    .sort((left, right) => left.queueOrder - right.queueOrder);
+  assert.deepEqual(queued.map(company => company.name), ['示例乙公司', '示例甲公司']);
+
+});
+
 function makeService() {
   let count = 0;
   const dir = path.join(PRIVATE_ROOT, `test-core-service-${randomUUID()}`);

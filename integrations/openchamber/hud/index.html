@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Application Copilot · 投递 HUD</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="boot" class="boot">
+      <div class="boot-mark" aria-hidden="true">AC</div>
+      <strong>正在连接 OpenChamber…</strong>
+      <p id="boot-message">投递 HUD 只在 OpenChamber 宿主中运行。</p>
+    </div>
+
+    <div id="app" hidden>
+      <header class="hud-header">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">AC</div>
+          <div class="brand-copy">
+            <strong>投递 HUD</strong>
+            <span id="project-label" class="muted">项目未加载</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <span id="queue-pill" class="pill" data-tone="neutral">状态未知</span>
+          <button id="refresh-button" class="icon-button" type="button" title="刷新任务状态">刷新</button>
+          <button id="close-button" class="icon-button" type="button" title="关闭 HUD">关闭</button>
+        </div>
+      </header>
+
+      <main class="hud-main">
+        <div id="global-banner" class="banner" role="status" aria-live="polite" hidden></div>
+
+        <section class="progress-card" aria-labelledby="progress-heading">
+          <div class="section-heading">
+            <div>
+              <h1 id="progress-heading">投递进度</h1>
+              <p id="progress-summary" class="muted">尚未读取任务池</p>
+            </div>
+            <strong id="progress-percent" class="progress-percent">0%</strong>
+          </div>
+          <div class="progress-track" role="progressbar" aria-label="投递进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+          <div class="progress-meta">
+            <span id="progress-count">0 / 0 家公司</span>
+            <span id="issue-count" class="muted">待处理问题 0</span>
+          </div>
+          <div class="stat-grid" aria-label="任务统计">
+            <div class="stat">
+              <span class="muted">总任务</span>
+              <strong id="total-count">0</strong>
+            </div>
+            <div class="stat">
+              <span class="muted">已完成</span>
+              <strong id="done-count">0</strong>
+            </div>
+            <div class="stat">
+              <span class="muted">待处理</span>
+              <strong id="attention-count">0</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="current-card" aria-labelledby="current-heading">
+          <div class="section-heading compact">
+            <div>
+              <span class="eyebrow">顺序队列</span>
+              <h2 id="current-heading">当前公司</h2>
+            </div>
+            <span id="current-status" class="pill" data-tone="neutral">暂无</span>
+          </div>
+          <strong id="current-company" class="current-company">暂无活动公司</strong>
+          <p id="current-detail" class="muted">队列尚未开始。</p>
+          <div class="control-row">
+            <button id="start-button" class="button primary" type="button">开始队列</button>
+            <button id="pause-button" class="button outline" type="button">暂停</button>
+            <button id="resume-button" class="button outline" type="button">恢复</button>
+          </div>
+        </section>
+
+        <section class="session-card" aria-labelledby="session-heading">
+          <div class="section-heading compact">
+            <div>
+              <span class="eyebrow">同一上下文</span>
+              <h2 id="session-heading">当前 OpenChamber 会话</h2>
+            </div>
+            <span id="session-status" class="pill" data-tone="neutral">未连接</span>
+          </div>
+          <p id="session-title" class="session-title">没有当前会话</p>
+          <form id="session-message-form" class="message-form" novalidate>
+            <label for="session-message" class="sr-only">发送给当前会话的消息</label>
+            <textarea id="session-message" rows="3" maxlength="16000" placeholder="给当前会话补充信息…"></textarea>
+            <div class="message-actions">
+              <span id="message-note" class="muted small">发送到当前会话，不创建新对话。</span>
+              <button id="send-message-button" class="button primary" type="submit">发送</button>
+            </div>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script src="./main.js"></script>
+  </body>
+</html>

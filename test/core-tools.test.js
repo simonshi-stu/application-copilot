@@ -24,11 +24,13 @@ test('工具白名单严格校验 schema，agent 不能调用本人操作', asyn
   assert.ok(!agentNames.includes('record_human_submission'));
   assert.ok(!agentNames.includes('record_historical_submission'));
   assert.ok(!agentNames.includes('start_queue'));
+  assert.ok(!agentNames.includes('prioritize_company'));
   assert.ok(!agentNames.includes('list_profile_facts_for_local_edit'));
   assert.ok(!agentNames.includes('acknowledge_recovery'));
   assert.ok(operatorNames.includes('record_human_submission'));
   assert.ok(operatorNames.includes('record_historical_submission'));
   assert.ok(operatorNames.includes('start_queue'));
+  assert.ok(operatorNames.includes('prioritize_company'));
   assert.ok(operatorNames.includes('list_profile_facts_for_local_edit'));
   assert.ok(operatorNames.includes('acknowledge_recovery'));
   assert.ok(!operatorNames.includes('set_state'));

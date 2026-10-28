@@ -33,6 +33,21 @@ export function nextQueuedCompany(companies = []) {
   return orderedCompanies(companies).find(company => company.status === 'queued') || null;
 }
 
+export function prioritizeQueuedCompany(companies = [], companyId) {
+  const ordered = orderedCompanies(companies);
+  const queued = ordered.filter(company => company.status === 'queued');
+  const target = queued.find(company => company.id === companyId);
+  if (!target) return false;
+  const targetIndex = queued.indexOf(target);
+  if (targetIndex === 0) return false;
+  const queueOrders = queued.map(company => company.queueOrder);
+  const reordered = [target, ...queued.filter(company => company.id !== companyId)];
+  reordered.forEach((company, index) => {
+    company.queueOrder = queueOrders[index];
+  });
+  return true;
+}
+
 export function currentCompany(companies = [], queue) {
   if (!queue?.currentCompanyId) return null;
   return companies.find(company => company.id === queue.currentCompanyId) || null;

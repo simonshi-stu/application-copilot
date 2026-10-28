@@ -6,6 +6,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ENTRY = resolve(ROOT, 'integrations/openchamber/panel/app.js');
 const OUTFILE = resolve(ROOT, 'integrations/openchamber/panel/main.js');
+export const HUD_ENTRY = resolve(ROOT, 'integrations/openchamber/hud/app.js');
+export const HUD_OUTFILE = resolve(ROOT, 'integrations/openchamber/hud/main.js');
 export const SERVICE_ENTRY = resolve(ROOT, 'integrations/openchamber/service/entry.js');
 export const SERVICE_OUTFILE = resolve(ROOT, 'integrations/openchamber/service/main.js');
 
@@ -49,6 +51,35 @@ export async function buildOpenChamberPanel({ rootDir = ROOT, minify = true } = 
   }
   if (result.outputFiles.length !== 1) {
     throw new Error('esbuild produced an unexpected number of output files.');
+  }
+  const text = result.outputFiles[0].text;
+  verifyPanelBundle(text);
+  return writeBundle(outfile, text);
+}
+
+export async function buildOpenChamberHud({ rootDir = ROOT, minify = true } = {}) {
+  const entry = resolve(rootDir, 'integrations/openchamber/hud/app.js');
+  const outfile = resolve(rootDir, 'integrations/openchamber/hud/main.js');
+  const result = await build({
+    entryPoints: [entry],
+    absWorkingDir: rootDir,
+    outfile,
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    target: ['chrome110', 'firefox115', 'safari16'],
+    minify,
+    sourcemap: false,
+    legalComments: 'none',
+    banner: { js: BANNER },
+    write: false,
+    logLevel: 'silent',
+  });
+  if (result.errors.length > 0) {
+    throw new Error(result.errors.map((error) => error.text).join('\n'));
+  }
+  if (result.outputFiles.length !== 1) {
+    throw new Error('esbuild produced an unexpected number of HUD output files.');
   }
   const text = result.outputFiles[0].text;
   verifyPanelBundle(text);
@@ -129,10 +160,13 @@ export function verifyServiceBundle(text) {
 
 async function main() {
   const panel = await buildOpenChamberPanel();
+  const hud = await buildOpenChamberHud();
   const service = await buildOpenChamberService();
   const panelPath = relative(ROOT, panel.outfile).replaceAll('\\', '/');
+  const hudPath = relative(ROOT, hud.outfile).replaceAll('\\', '/');
   const servicePath = relative(ROOT, service.outfile).replaceAll('\\', '/');
   console.log(`Built ${panelPath} (${panel.bytes} bytes, classic IIFE).`);
+  console.log(`Built ${hudPath} (${hud.bytes} bytes, classic IIFE).`);
   console.log(`Built ${servicePath} (${service.bytes} bytes, single-file ESM).`);
 }
 

@@ -1,94 +1,101 @@
-# Application Copilot
+# OpenChamber Application HUD
 
-A job-application workspace for OpenChamber: queue company links, organize your information, choose roles, and handle questions in one place without relying on a long chat history.
+A standalone Windows HUD and OpenChamber extension bridge for the local Application Copilot queue. **The standalone Windows HUD is the primary UI; OpenChamber provides session interaction and message delivery.**
 
 [中文](README.md) · [English](README.en.md)
 
-**The extension is a development build.** The existing [web preparation workspace](https://simonshi-stu.github.io/application-copilot/) remains available, but it is not the full extension and does not operate job sites automatically.
+## Project identity
 
-**Extension identity:** the native host for this project is **OpenChamber**, built with OpenChamber SDK 2.3.2. It is not a native OpenCode plugin or a generic Harness plugin. The repository also provides an optional local MCP server for preparation tools in OpenCode and other MCP-compatible clients.
+- **Windows HUD:** uses `mshta.exe` and a service bound only to `127.0.0.1` to show queue progress, the active company, start/pause/resume controls, and priority changes. OpenChamber can stay minimized.
+- **OpenChamber extension:** provides the task-pool panel and a closable HUD dialog. Messages from the standalone HUD enter a private project inbox and are forwarded by the extension HUD to an explicitly targeted existing session.
+- **Session interaction:** the extension uses the OpenChamber SDK's `host.openSession()` and `host.prompt({ send: true })`. It opens and sends to existing sessions only; it never creates a session.
+- **Workflow core:** Application Copilot supplies the local state machine, sequential company queue, role records, issue queue, and verbatim reuse of confirmed text.
 
-## 0. Credits
+The native host for this project is **OpenChamber**, not a native OpenCode plugin or a generic Harness plugin. OpenCode and other clients can reuse only the limited preparation tools exposed through an explicitly configured local MCP server or adapter.
 
-- The extension uses the [OpenChamber SDK](https://docs.openchamber.dev/sdk/). Thanks to the OpenChamber and OpenCode communities for their extension and model tooling.
-- The original workspace took layout ideas from [Tabler](https://github.com/tabler/tabler), [shadcn-admin](https://github.com/satnaing/shadcn-admin), and [Job Tracker](https://github.com/Muatasim-Aswad/job-tracker), without copying their branding or assets.
-- This project is [MIT licensed](LICENSE). SDK and build-tool copyrights and licenses are included in [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES).
+## Non-goals
 
-## 1. What is it for?
+- No delegated login, CAPTCHA handling, or final submission.
+- No promise of a complete unattended flow for arbitrary job sites; real sites and model providers require separate verification.
+- The standalone HUD cannot call OpenChamber's `host` bridge directly. To deliver a message into a session, keep the OpenChamber plugin HUD open; if it is closed, messages wait in the private inbox without being lost.
 
-After a few applications, it is easy to forget which roles you applied for, where you stopped, and what still needs an answer. Resume parsers can also mix a project's description with your own responsibilities.
+## Entry points
 
-Application Copilot brings those tasks together: companies in a queue, structured personal records, roles chosen by you, and ordinary questions collected rather than interrupting every field. Confirmed text is used verbatim, not rewritten during filling.
-
-**Code controls the workflow, and progress lives in local records—not chat history.** The tool helps with preparation and supported filling, but login, CAPTCHA, and final submission remain yours.
-
-## 2. When and how to use it
-
-For students and interns applying to many roles, or anyone filling the same long forms repeatedly.
-
-The intended flow:
-
-1. Prepare and confirm your records, then queue company links and optional referral codes.
-2. Log in yourself. The assistant finds suitable roles; you choose them and set priorities.
-3. Use supported filling, readback, and review. Ordinary questions appear together.
-4. Answer missing items, review, submit on the official site yourself, and record the result.
-5. Move to the next company once all selected roles are handled, or record a supported reason for skipping it.
-
-Submitted roles, self-reported submissions awaiting official verification, and companies with no suitable roles are separate records. **Filled is not submitted; a failed search is not proof that no roles exist.** Current support is listed below.
-
-## 3. Current status
-
-| Capability | Current status |
+| Entry point | Purpose |
 |---|---|
-| Original web workspace | DOCX/text parsing, paragraph confirmation, verbatim copy, company lists, and local checks are available |
-| Fixed workflow and private records | Code-based state machine, confirmation versions, scoped queries, company/role ledger, and issue queue |
-| Sequential company queue | Completion guards, pause/resume, and duplicate-advance protection; user receipts and official verification stay separate |
-| OpenChamber interface | Panel and service built with SDK 2.3.2; OpenChamber 2.3.2 installation, permission approval, fictional enqueue, and close/reopen persistence have been verified |
-| Role models | Separate search, execution, and review settings; saving a selection does not mean a model has run |
-| Job-site filling | Moka is the first target; no complete real-site application flow has been verified, and arbitrary-site support is not promised |
+| Standalone Windows HUD | Primary UI for independent queue monitoring and control |
+| OpenChamber extension | Task pool, session HUD, target-session switching, and message relay |
+| Original web workspace | Resume preparation, paragraph confirmation, and manual copying; not the full HUD |
+| Local MCP | Stateless preparation functions for OpenCode or other MCP clients |
 
-This is not an unattended mass-application service. Without real page readback and a valid review result, it must not report that a website check passed.
+## Quick start
 
-## 4. Demo and preview
+### 1. Standalone Windows HUD
 
-### Online preview: web preparation workspace
+Requires Node.js 22+. From the repository root:
 
-Open the [online preparation workspace](https://simonshi-stu.github.io/application-copilot/) to see record organization, paragraph confirmation, and manual-copy flows. This is a static web demo; it does not include the OpenChamber panel, local service, or job-site automation.
-
-### Full extension preview: local OpenChamber
-
-The full “投递任务池” panel must be installed in OpenChamber 2.3.2+ because it depends on the host extension panel and local-service bridge. See the next section for installation. The OpenChamber panel cannot be represented as a GitHub Pages page because it requires local host permissions.
-
-## 5. How to use it
-
-### Recommended: install in OpenChamber
-
-The extension targets OpenChamber **2.3.2 or newer**, using verified interfaces from the matching SDK. In **Settings → Extensions**, add the extension ZIP or this repository's root folder, review its local-service permissions, and open **投递任务池 / Application queue**. Do not select the old `extension/` subfolder.
-
-Preparing it from source requires Node.js 22+:
-
-```text
+```powershell
 npm ci
-npm run build:openchamber
-npm run package:openchamber
+npm run standalone:hud
 ```
 
-The package is `artifacts/application-copilot-openchamber-v0.5.0.zip`. Its unpacked service passed authenticated health checks, and OpenChamber 2.3.2 installation, authorization, and fictional enqueue persistence have also been verified; this does not verify a real job-site flow. Do not install an incomplete package after a failed build or safety check. Git-URL installation also requires a version with complete prebuilt files. For public distribution, attach the ZIP to a GitHub Release rather than committing `private/` or `artifacts/`. OpenChamber starts the service when needed; **you do not need to launch a localhost preview yourself**.
+You can also double-click `start-standalone-hud.cmd`. Bind a project and an OpenChamber target session explicitly:
 
-Latest extension ZIP: <https://github.com/simonshi-stu/application-copilot/releases/latest>
+```powershell
+npm run standalone:hud -- --project E:\path\to\project --session ses_...
+```
 
-### Use the original web or Chrome extension
+`--session` binds the message target; it does not create a session. Closing the window stops the local helper service.
 
-Open the [web workspace](https://simonshi-stu.github.io/application-copilot/), or load the `extension/` folder from Chrome/Edge's extension manager. These are for preparation and manual copying; they do not gain the new extension's site-execution abilities merely by being opened.
+### 2. Install the OpenChamber extension
 
-### Data and models
+The extension targets OpenChamber **2.3.2 or newer**:
 
-- Extension records belong in the current project's private directory. Existing web data stays in browser storage and is not migrated automatically. Back it up before changing devices.
-- Personal and family information, resume/project text, attachments, logs, and keys must not enter GitHub or distributed packages. Family fields are used only when actually required and authorized.
-- Cloud models receive authorized, necessary information. Keeping data out of GitHub is not the same as keeping it out of a model provider. Do not paste keys into chat.
-- The host-managed service runs with your system-user privileges. A remote OpenChamber instance may store data on the remote machine, not your computer.
+1. Run `npm run package:openchamber`, or download the ZIP from the [Latest Release](https://github.com/simonshi-stu/openchamber-application-hud/releases/latest).
+2. In OpenChamber, open **Settings → Extensions** and add the ZIP or the repository root.
+3. Review and approve the `prompt`, `sessions`, and local-service permissions.
+4. Open **投递任务池 / Application queue**. To use the session HUD, choose **投递 HUD** from **Session actions** in the current session header.
 
-More: [OpenChamber usage](docs/OPENCHAMBER.md) · [Usage statement](docs/USAGE.md) · [Deployment](docs/DEPLOY.md) · [Optional MCP](docs/MCP.md). Supporting documents are currently in Chinese.
+The `sessions` grant is used only to open an existing explicitly targeted session for standalone-HUD delivery; it never creates a session. Closing the HUD does not close the session.
+
+### 3. Build from source
+
+```powershell
+npm ci
+npm test
+npm run package:openchamber
+npm run check:publication
+```
+
+The ZIP is published as a GitHub Release asset; `private/`, `artifacts/`, and runtime data are not committed to the repository.
+
+## Current status
+
+| Capability | Status |
+|---|---|
+| Standalone Windows HUD | Implemented: queue progress, active company, start/pause/resume, priorities, and message inbox |
+| OpenChamber interaction | Implemented: SDK 2.3.2 panel, service, session HUD, target-session switching, and message relay |
+| Local workflow and queue | Implemented: fixed state machine, pause/resume, sequential progression, and persistent records |
+| Real job-site flow | No complete real-site loop has been verified; login, CAPTCHA, and final submission remain manual |
+
+Recent fictional integration testing verified that a standalone-HUD message reaches the explicitly targeted OpenChamber session, receives a reply, and is acknowledged in the inbox after delivery. Fictional testing does not prove a real job-application flow.
+
+## Data and privacy boundary
+
+- Session IDs, API keys, names, resumes, family information, project text, attachments, application records, screenshots, logs, and browser caches are not uploaded to GitHub.
+- Official records and runtime state belong in explicit `private/` subdirectories of the current project; they are ignored by Git and must still be audited before publication.
+- Tests use fictional data and `example.invalid` addresses; publication also checks staged filenames, staged content, package allowlists, and sensitive patterns.
+- Cloud-model disclosure and GitHub publication are separate permissions. Keeping data out of GitHub does not mean that authorized necessary data is never sent to a model provider.
+
+## Documentation
+
+- [OpenChamber usage](docs/OPENCHAMBER.md)
+- [Architecture and integration boundaries](docs/ARCHITECTURE.md)
+- [Deployment and web preview](docs/DEPLOY.md)
+- [Usage statement](docs/USAGE.md)
+- [Optional MCP](docs/MCP.md)
+
+Original static web workspace: [online preview](https://simonshi-stu.github.io/openchamber-application-hud/). It does not include the OpenChamber panel, local service, or job-site automation.
 
 ## License
 

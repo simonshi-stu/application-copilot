@@ -98,6 +98,8 @@ OpenChamber 扩展：任务池 / 岗位选择与排序 / 问题弹窗 / 模型�
 ### 集成方式与明确限制
 
 - 原生 OpenChamber 扩展可提供侧栏及全屏页；与 Chrome／Edge MV3 扩展、OpenCode 服务端插件是三种不同扩展机制，不能互相冒充。现有 `extension/` 不能未经适配直接当 OpenChamber 扩展安装。
+- 当前扩展另提供 `contributes.attach` 的独立 dialog HUD，并通过 `contributes.actions` 在会话操作菜单中暴露“投递 HUD”：它轮询本地任务池 `/api/state` 显示进度和当前公司，使用 `host.onSession`／`host.onSessionLifecycle` 观察会话，并用 `host.prompt({ send: true })` 向当前会话发消息；独立窗口消息若带有明确 `targetSessionId`，HUD 先调用 `host.openSession()` 切换到该会话，再发送并确认消费；不调用 `startSession`。HUD 的关闭按钮只调用 `host.close()`，关闭的是 HUD dialog，不是会话。
+- 另有 `scripts/standalone-hud.mjs` 与 `integrations/openchamber/standalone/`：Windows 入口启动受认证的本地服务和一个只绑定 loopback 的静态代理，再由系统 `mshta.exe` 打开真正独立的 Windows HTML 窗口。该窗口直接读取绑定项目的任务状态、发送有限的 `user.start`／`user.pause`／`user.resume`／`user.prioritizeCompany` 命令，并把消息写入项目私有的 `session-inbox.json`。OpenChamber HUD 打开时会把桥接队列逐条发送到当前会话并确认消费；独立窗口本身仍不具备 OpenChamber guest bridge，未打开 HUD 时消息只会排队。关闭窗口会停止辅助服务；这不是 `.exe` 安装包，也不是 OpenCode 原生插件。
 - UI 可复用原生 JS 业务纯函数；按宿主要求打包脚本，不引入 React 迁移。新增 SDK 或构建工具、service 权限、OpenCode 插件及浏览器权限都须实施前另行说明并批准。
 - OpenChamber 官方扩展面板在 sandbox 中，不能直接操纵招聘网站、访问登录 cookie、任意读文件或默认直连本地端口；通过批准的宿主能力通信。
 - `host.prompt` 跟随当前会话模型；`host.generate` 只能调用宿主 Small Model。按角色固定多个模型需要另建明确授权的后端路由，不能假设宿主已有任意模型参数。OpenCode V2 的客户端／插件文档提供会话、模型与工具集成基础，但须核验实际安装版本及协议。

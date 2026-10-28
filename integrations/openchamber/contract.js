@@ -34,6 +34,17 @@
  * GET /health  (host readiness probe only; the panel must not call it)
  *   200 once the service is ready to accept authenticated requests.
  *
+ * Session bridge
+ * --------------
+ * GET /api/session-inbox?directory=<project directory>
+ *   Returns messages queued by the standalone HUD. The OpenChamber guest may
+ * send them to the current session and acknowledge them one at a time.
+ * POST /api/session-inbox/ack
+ *   { directory, messageIds }
+ *
+ * A queued message may carry `targetSessionId`; the HUD opens that exact
+ * host session before calling `host.prompt`, then acknowledges only after send.
+ *
  * WorkbenchState (only the fields the panel needs; unknown fields are ignored)
  * -------------------------------------------------------------------------
  * {
@@ -82,7 +93,7 @@
  * Commands
  * --------
  * The panel sends only user.* commands listed in UI_COMMANDS. In addition to
- * enqueue/start/pause/resume/selectJobs/reportSubmitted, the panel records
+ * enqueue/start/pause/resume/prioritizeCompany/selectJobs/reportSubmitted, the panel records
  * human receipts with confirmLogin and markReady, holds with deferCompany /
  * resumeCompany / skipCompany / skipJob, manual evidence with recordCandidates
  * / recordNoPositions, issue answers with resolveIssue (answer/defer/resolve),
@@ -99,6 +110,8 @@ export const API_PATHS = Object.freeze({
   state: '/api/state',
   capabilities: '/api/capabilities',
   health: '/health',
+  sessionInbox: '/api/session-inbox',
+  sessionInboxAck: '/api/session-inbox/ack',
 });
 
 export const COMMAND_PREFIX = Object.freeze({
@@ -112,6 +125,7 @@ export const COMMAND = Object.freeze({
   start: 'user.start',
   pause: 'user.pause',
   resume: 'user.resume',
+  prioritizeCompany: 'user.prioritizeCompany',
   confirmLogin: 'user.confirmLogin',
   selectJobs: 'user.selectJobs',
   reportSubmitted: 'user.reportSubmitted',
@@ -507,6 +521,30 @@ export function buildCapabilitiesRequest() {
   return { method: 'GET', path: API_PATHS.capabilities };
 }
 
+export function buildSessionInboxRequest(directory) {
+  return {
+    method: 'GET',
+    path: API_PATHS.sessionInbox,
+    query: { directory: requireString(directory, 'directory', { max: 1024 }) },
+  };
+}
+
+export function buildSessionInboxAckRequest(directory, messageIds) {
+  const dir = requireString(directory, 'directory', { max: 1024 });
+  if (!Array.isArray(messageIds) || messageIds.length < 1 || messageIds.length > 100) {
+    throw new ContractError('INVALID_SESSION_MESSAGE_IDS', '会话桥接确认 ID 列表必须包含 1～100 项。');
+  }
+  const ids = messageIds.map((id) => requireString(id, 'messageId', { max: 128 }));
+  if (new Set(ids).size !== ids.length) {
+    throw new ContractError('INVALID_SESSION_MESSAGE_IDS', '会话桥接确认 ID 不能重复。');
+  }
+  return {
+    method: 'POST',
+    path: API_PATHS.sessionInboxAck,
+    body: JSON.stringify({ directory: dir, messageIds: ids }),
+  };
+}
+
 export function validateCommandInput(command, input) {
   if (!isRecord(input)) {
     throw new ContractError('INVALID_INPUT', '命令参数必须是对象。');
@@ -527,6 +565,8 @@ export function validateCommandInput(command, input) {
       return { reason: optionalString(input.reason, '暂停原因', 500) };
     case COMMAND.resume:
       return {};
+    case COMMAND.prioritizeCompany:
+      return { companyId: requireString(input.companyId, 'companyId', { max: 128 }) };
     case COMMAND.confirmLogin:
       return {
         companyId: requireString(input.companyId, 'companyId', { max: 128 }),
@@ -980,6 +1020,41 @@ export function parseCapabilitiesResponse(result) {
       stage4: capabilities.stage4 === true,
     },
   };
+}
+
+export function parseSessionInboxResponse(result) {
+  const body = decodeServiceResponse(result);
+  if (!Array.isArray(body.messages)) {
+    throw new ContractError('INVALID_SESSION_INBOX_RESPONSE', '会话桥接响应缺少 messages 数组。');
+  }
+  const messages = body.messages.map((message, index) => {
+    if (!isRecord(message)) {
+      throw new ContractError('INVALID_SESSION_INBOX_RESPONSE', `会话桥接消息 ${index + 1} 不是对象。`);
+    }
+    const id = requireString(message.id, `session.messages[${index}].id`, { max: 128 });
+    const text = requireString(message.text, `session.messages[${index}].text`, {
+      max: 16000,
+      preserve: true,
+    });
+    if (!text.trim()) {
+      throw new ContractError('INVALID_SESSION_INBOX_RESPONSE', `会话桥接消息 ${index + 1} 不能为空。`);
+    }
+    const createdAt = requireString(message.createdAt, `session.messages[${index}].createdAt`, { max: 80 });
+    const targetSessionId = optionalString(message.targetSessionId, `session.messages[${index}].targetSessionId`, 128);
+    return { id, text, createdAt, targetSessionId: targetSessionId || null };
+  });
+  if (new Set(messages.map((message) => message.id)).size !== messages.length) {
+    throw new ContractError('INVALID_SESSION_INBOX_RESPONSE', '会话桥接消息 ID 不能重复。');
+  }
+  return { messages };
+}
+
+export function parseSessionInboxAckResponse(result) {
+  const body = decodeServiceResponse(result);
+  if (!Number.isInteger(body.acknowledged) || body.acknowledged < 0 || body.acknowledged > 100) {
+    throw new ContractError('INVALID_SESSION_INBOX_RESPONSE', '会话桥接确认响应无效。');
+  }
+  return { acknowledged: body.acknowledged };
 }
 
 function requireRevision(value) {

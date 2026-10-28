@@ -211,6 +211,74 @@ test('auth, protocol limits, unknown fields and GET state without writes', async
   await assert.rejects(fs.stat(path.join(client.project, 'private')), { code: 'ENOENT' });
 });
 
+test('session inbox bridges standalone messages and acknowledges only after delivery', async (t) => {
+  const env = await createEnvironment(t);
+  const client = await startApp(env);
+
+  const empty = await readResponse(await request(
+    client,
+    `/api/session-inbox?directory=${encodeURIComponent(client.project)}`,
+  ));
+  assert.equal(empty.status, 200);
+  assert.deepEqual(empty.body.messages, []);
+  await assert.rejects(fs.stat(path.join(client.project, 'private')), { code: 'ENOENT' });
+
+  const appended = await readResponse(await request(client, '/api/session-inbox', {
+    method: 'POST',
+    body: {
+      directory: client.project,
+      text: '  独立 HUD 的虚构消息  ',
+      targetSessionId: 'ses_virtual_service',
+    },
+  }));
+  assert.equal(appended.status, 200, appended.text);
+  assert.equal(appended.body.message.text, '  独立 HUD 的虚构消息  ');
+  assert.equal(appended.body.message.targetSessionId, 'ses_virtual_service');
+
+  const pending = await readResponse(await request(
+    client,
+    `/api/session-inbox?directory=${encodeURIComponent(client.project)}`,
+  ));
+  assert.deepEqual(pending.body.messages.map(message => message.id), [appended.body.message.id]);
+  assert.equal(pending.body.messages[0].text, '  独立 HUD 的虚构消息  ');
+  assert.equal(pending.body.messages[0].targetSessionId, 'ses_virtual_service');
+
+  const acknowledged = await readResponse(await request(client, '/api/session-inbox/ack', {
+    method: 'POST',
+    body: { directory: client.project, messageIds: [appended.body.message.id] },
+  }));
+  assert.equal(acknowledged.status, 200, acknowledged.text);
+  assert.equal(acknowledged.body.acknowledged, 1);
+
+  const afterAck = await readResponse(await request(
+    client,
+    `/api/session-inbox?directory=${encodeURIComponent(client.project)}`,
+  ));
+  assert.deepEqual(afterAck.body.messages, []);
+});
+
+test('prioritize command moves a queued company before starting the queue', async (t) => {
+  const env = await createEnvironment(t);
+  const client = await startApp(env);
+  const first = await command(client, 'user.enqueue', {
+    url: 'https://first.example.invalid/jobs',
+    companyName: '虚构首家公司',
+  }, 0);
+  const second = await command(client, 'user.enqueue', {
+    url: 'https://second.example.invalid/jobs',
+    companyName: '虚构第二家公司',
+  }, first.body.revision);
+  const secondId = second.body.state.companies.find(company => company.name === '虚构第二家公司').id;
+
+  const prioritized = await command(client, 'user.prioritizeCompany', { companyId: secondId }, second.body.revision);
+  assert.equal(prioritized.status, 200, prioritized.text);
+  assert.equal(prioritized.body.result.idempotent, false);
+  const started = await command(client, 'user.start', {}, prioritized.body.revision);
+  assert.equal(started.status, 200, started.text);
+  assert.equal(started.body.state.currentCompanyId, secondId);
+  assert.equal(started.body.state.companies.find(company => company.id === secondId).status, 'awaiting_login');
+});
+
 test('queue flow: manual candidates, selection, preparation gate, submission receipt', async (t) => {
   const env = await createEnvironment(t);
   const client = await startApp(env);
